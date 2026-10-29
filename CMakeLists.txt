@@ -89,7 +89,9 @@ set_target_properties(ctr_native PROPERTIES
     C_STANDARD_REQUIRED ON
     C_EXTENSIONS OFF
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
+set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT ctr_native)
 target_include_directories(ctr_native PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_compile_definitions(ctr_native PRIVATE
     CTR_NATIVE

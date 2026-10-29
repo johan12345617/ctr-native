@@ -251,11 +251,13 @@ struct Model *MM_Characters_GetModelByName(const char *name)
 }
 void MM_Characters_DrawWindows(b32 showDrivers)
 {
+#if !defined(CTR_NATIVE)
 	struct InstanceWithIDPP
 	{
 		struct Instance instance;
 		struct InstDrawPerPlayer idpp[4];
 	};
+#endif
 	register b32 boolShowDrivers CTR_PSX_REGISTER("$22");
 	register struct MetaDataCHAR *characterMetadata CTR_PSX_REGISTER("$23");
 	register s16 *desiredCharacterIDs CTR_PSX_REGISTER("$21");
@@ -263,7 +265,11 @@ void MM_Characters_DrawWindows(b32 showDrivers)
 	register u32 transitionOffsetOrPointer CTR_PSX_REGISTER("$3");
 	register struct PushBuffer *pb CTR_PSX_REGISTER("$8");
 	struct Instance *driverInst;
+#if defined(CTR_NATIVE)
+	struct Instance *driverWithIDPP;
+#else
 	struct InstanceWithIDPP *driverWithIDPP;
+#endif
 	register struct GameTracker *loopGameTracker CTR_PSX_REGISTER("$5");
 	struct Model *model;
 	register SVec2 *windowPos CTR_PSX_REGISTER("$7");
@@ -439,7 +445,12 @@ LAB_Characters_DrawWindows_Loop:
 	}
 
 	indexOrSlideFactor = playerIndex;
+#if defined(CTR_NATIVE)
+	// Use the instance's trailing records without nesting its zero-sized array.
+	driverWithIDPP = driverInst;
+#else
 	driverWithIDPP = (struct InstanceWithIDPP *)driverInst;
+#endif
 
 	// clear pushBuffer in every InstDrawPerPlayer
 	driverWithIDPP->idpp[0].pushBuffer = 0;

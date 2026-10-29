@@ -36,8 +36,9 @@ The recommended native Windows toolchain is MSVC x86:
 
 1. Install Visual Studio 2022 or Visual Studio Build Tools 2022.
 2. Select the **Desktop development with C++** workload and a current Windows SDK.
-3. Ensure CMake 3.20 or newer is on `PATH` (standalone or the Visual Studio C++ CMake tools component).
-4. Run `build-msvc.bat`, or select the `windows-msvc-x86` CMake preset in CLion.
+3. Install CMake 3.21 or newer (standalone or the Visual Studio C++ CMake tools component). `build-msvc.bat` also detects CMake bundled with Visual Studio when it is not on `PATH`.
+4. Install Python 3 for the matching unit tests. No third-party Python packages are required.
+5. Run `build-msvc.bat`, or select the `windows-msvc-x86` CMake preset in CLion.
 
 The existing MinGW i686 build remains supported:
 
@@ -84,6 +85,26 @@ Output:
 - MSVC: `build-msvc-x86/Release/ctr_native.exe`
 - MinGW: `build/ctr_native.exe`
 - Linux: `build/ctr_native`
+
+### Debugging and testing on Windows
+
+From PowerShell in the project directory:
+
+```powershell
+.\build-msvc.bat Debug
+```
+
+This configures MSVC x86, builds SDL3 and the game with debug symbols and optimizations disabled, and runs the Windows CTest suite. The default command without `Debug` still builds and tests Release.
+
+Open the generated `build-msvc-x86/CTR-Native.slnx` (or `.sln` with older Visual Studio versions), select **Debug / Win32**, and press **F5**. `ctr_native` is the startup project, and its debugger working directory is the source directory. Set breakpoints in `main.c`, `game/`, or `platform/`.
+
+To run without the debugger:
+
+```powershell
+.\build-msvc-x86\Debug\ctr_native.exe
+```
+
+The Windows test suite includes the executable version check and Python matching unit tests. The particle renderer and GTE regression executables currently run only on Linux. Keep your own disc image at `assets/ctr-u.bin`; debug builds find it there automatically. See [REPLAYS.md](docs/REPLAYS.md) for recording bugs and using quick save states.
 
 ### Clean build
 

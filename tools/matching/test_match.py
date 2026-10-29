@@ -227,6 +227,7 @@ class ToolchainTests(unittest.TestCase):
 
     def test_assembler_tracks_included_sources(self) -> None:
         toolchain = SimpleNamespace(binutils={"as": Path("mips-as")})
+        include_directory = Path("game/RenderLevel/psx")
 
         with mock.patch.object(ctr_match, "run_checked") as run_checked:
             ctr_match.assemble_mips_source(
@@ -234,7 +235,7 @@ class ToolchainTests(unittest.TestCase):
                 Path("renderer.s"),
                 Path("renderer.o"),
                 0,
-                [Path("game/RenderLevel/psx")],
+                [include_directory],
                 Path("renderer.d"),
             )
 
@@ -242,7 +243,7 @@ class ToolchainTests(unittest.TestCase):
             [
                 "mips-as",
                 "-G0",
-                "-Igame/RenderLevel/psx",
+                f"-I{include_directory}",
                 "--MD",
                 "renderer.d",
                 "-o",

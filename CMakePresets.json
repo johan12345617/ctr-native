@@ -2,7 +2,7 @@
   "version": 3,
   "cmakeMinimumRequired": {
     "major": 3,
-    "minor": 20,
+    "minor": 21,
     "patch": 0
   },
   "configurePresets": [
@@ -17,9 +17,8 @@
     {
       "name": "windows-msvc-x86",
       "displayName": "Windows MSVC x86",
-      "description": "Native 32-bit Windows build using Visual Studio 2022",
+      "description": "Native 32-bit Windows build using an installed Visual Studio 2022 or newer",
       "inherits": "common",
-      "generator": "Visual Studio 17 2022",
       "architecture": "Win32",
       "binaryDir": "${sourceDir}/build-msvc-x86",
       "condition": {
