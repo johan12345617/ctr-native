@@ -225,6 +225,10 @@ b32 GAMEPROG_CheckGhostsBeaten(s32 ghostID)
 void GAMEPROG_NewProfile_OutsideAdv(struct GameSave *save)
 {
 	memset(save, 0, sizeof(*save));
+#ifdef CTR_NATIVE
+	// Native and browser play start with the full playable roster.
+	save->progress.unlocks[0] |= UNLOCK_CHARACTERS;
+#endif
 	GAMEPROG_ResetHighScores(&save->progress);
 }
 

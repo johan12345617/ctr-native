@@ -12,6 +12,7 @@
 
 # Local matching experiments and caches.
 /.cache/
+/web/node_modules/
 
 # Runtime state.
 /memcards/

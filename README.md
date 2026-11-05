@@ -63,6 +63,21 @@ sudo apt install libx11-dev libxext-dev libgl1-mesa-dev libasound2-dev libudev-d
 
 ## Building
 
+### Play in a web browser
+
+The WebAssembly/WebGL2 target runs the same game in a browser, including
+local split-screen. Build with `build-web.ps1` on Windows or `bash build-web.sh`
+on Linux/macOS, then run `npm --prefix web start`. Select your own NTSC-U
+`.bin` disc in the launcher; it stays local and is never uploaded.
+
+See [the web build guide](docs/WEB.md) for prerequisites, controls, persistent
+saves, hosting, and online lobbies. Choose **Online → Create Lobby** or
+**Join Lobby**: one host streams the screen and game audio while guests send
+controller inputs. Guests do not need a disc. All playable characters are
+unlocked by default in native and web builds.
+
+### Native desktop builds
+
 ```
 build-msvc.bat       # Windows, MSVC x86 (recommended)
 build.bat            # Windows, MinGW i686

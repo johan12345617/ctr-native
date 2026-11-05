@@ -45,7 +45,9 @@
 #include "platform/native_gpu_links.c"
 #include "platform/native_gpu.c"
 #include "platform/native_gte_core.c"
+#if !defined(__EMSCRIPTEN__)
 #include "platform/native_glad.c"
+#endif
 #include "platform/native_input.c"
 #include "platform/native_inline_c.c"
 #include "platform/native_libapi.c"
@@ -64,6 +66,9 @@
 #include "platform/native_savestate.c"
 #include "platform/native_state.c"
 #include "platform/native_str.c"
+#if defined(__EMSCRIPTEN__)
+#include "platform/native_web.c"
+#endif
 
 #ifndef CC
 #if defined(__GNUC__)

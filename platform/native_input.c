@@ -1,9 +1,9 @@
+#include <SDL3/SDL.h>
 #include <platform/native_input.h>
 
 #include <macros.h>
 #include "psx/libpad.h"
 
-#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,6 +23,7 @@
 // NOTE(aalhendi): Little-endian tag `CTRI` = CTR native Input snapshot.
 #define NATIVE_INPUT_STATE_MAGIC           0x49525443
 #define NATIVE_INPUT_STATE_VERSION         1
+#define NATIVE_INPUT_REMOTE_TIMEOUT_MS     1000
 
 // NOTE(aalhendi): Native input preserves behavior from PsyCross's
 // MIT-licensed pad implementation while moving host ownership into ctr-native.
@@ -100,6 +101,9 @@ global_variable s32 s_inputInitialized;
 global_variable s32 s_installedSnapshotsActive;
 global_variable s32 s_keyboardControllerSlot = NATIVE_INPUT_DEFAULT_KEYBOARD_SLOT;
 global_variable s32 s_lastActiveControllerSlot = -1;
+global_variable struct PlatformInputPadSnapshot s_remotePads[NATIVE_INPUT_MAX_CONTROLLERS];
+global_variable u64 s_remotePadUpdated[NATIVE_INPUT_MAX_CONTROLLERS];
+global_variable u8 s_remotePadActive[NATIVE_INPUT_MAX_CONTROLLERS];
 
 extern s32 g_padCommEnable;
 
@@ -732,6 +736,7 @@ int Platform_InputInit(void)
 	s_lastActiveControllerSlot = -1;
 	s_installedSnapshotsActive = 0;
 	s_keyboardState = SDL_GetKeyboardState(NULL);
+	memset(s_remotePadActive, 0, sizeof(s_remotePadActive));
 
 	if (SDL_InitSubSystem(SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC) == 0)
 	{
@@ -764,6 +769,7 @@ void Platform_InputShutdown(void)
 	s_lastActiveControllerSlot = -1;
 	memset(s_padSlotData, 0, sizeof(s_padSlotData));
 	s_keyboardState = NULL;
+	memset(s_remotePadActive, 0, sizeof(s_remotePadActive));
 }
 
 void Platform_InputUpdate(void)
@@ -794,6 +800,17 @@ void Platform_InputUpdate(void)
 		NativeInput_ResetSnapshot(slot);
 		NativeInput_ApplyController(slot);
 		NativeInput_ApplyKeyboard(slot, keyboardButtons);
+		if (s_remotePadActive[slot])
+		{
+			if (SDL_GetTicks() - s_remotePadUpdated[slot] < NATIVE_INPUT_REMOTE_TIMEOUT_MS)
+			{
+				s_controllers[slot].snapshot = s_remotePads[slot];
+			}
+			else
+			{
+				s_remotePadActive[slot] = 0;
+			}
+		}
 	}
 	NativeInput_WritePadBus();
 }
@@ -822,6 +839,54 @@ void Platform_InputControllerRemoved(int instanceId)
 			return;
 		}
 	}
+}
+
+int Platform_InputSetRemotePad(int slot, unsigned int buttons, int rightX, int rightY, int leftX, int leftY)
+{
+	if (!NativeInput_IsValidControllerSlot(slot) || buttons > 0xffff ||
+	    (unsigned int)rightX > 255 || (unsigned int)rightY > 255 ||
+	    (unsigned int)leftX > 255 || (unsigned int)leftY > 255)
+	{
+		return 0;
+	}
+
+	struct PlatformInputPadSnapshot *pad = &s_remotePads[slot];
+	memset(pad, 0, sizeof(*pad));
+	pad->connected = 1;
+	pad->id = NATIVE_INPUT_PAD_ANALOG;
+	NativeInput_SetSnapshotButtons(pad, (u16)~buttons);
+	pad->analog[0] = (u8)rightX;
+	pad->analog[1] = (u8)rightY;
+	pad->analog[2] = (u8)leftX;
+	pad->analog[3] = (u8)leftY;
+	s_remotePadUpdated[slot] = SDL_GetTicks();
+	s_remotePadActive[slot] = 1;
+	return 1;
+}
+
+int Platform_InputClearRemotePad(int slot)
+{
+	if (!NativeInput_IsValidControllerSlot(slot))
+	{
+		return 0;
+	}
+	s_remotePadActive[slot] = 0;
+	return 1;
+}
+
+int Platform_InputSetKeyboardPlayer(int slot)
+{
+	if (!NativeInput_IsValidControllerSlot(slot))
+	{
+		return 0;
+	}
+	s_keyboardControllerSlot = slot;
+	return 1;
+}
+
+int Platform_InputGetKeyboardPlayer(void)
+{
+	return s_keyboardControllerSlot;
 }
 
 int Platform_InputCycleKeyboardController(void)

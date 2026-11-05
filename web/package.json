@@ -1,0 +1,16 @@
+{
+  "name": "ctr-native-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build:css": "tailwindcss -i styles.css -o ../build-web/styles.css --minify",
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": { "ws": "8.22.1" },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.1.18",
+    "tailwindcss": "4.1.18"
+  }
+}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#171713">
+    <title>CTR Native · Play in your browser</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body class="min-h-screen bg-[#171713] font-sans text-stone-100 antialiased">
+    <main class="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-10">
+      <header class="mb-7 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p class="mb-2 text-sm font-medium text-orange-300">Browser edition</p>
+          <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">CTR Native</h1>
+        </div>
+        <p class="max-w-sm text-sm leading-6 text-stone-300">Same game. One shared screen.<br>Play solo or use the original local split-screen modes.</p>
+      </header>
+
+      <nav aria-label="Play mode" class="mb-5 flex gap-3">
+        <button id="mode-local" type="button" aria-pressed="true" class="min-h-11 rounded-md border border-stone-600 px-5 font-semibold hover:bg-stone-800 aria-pressed:border-orange-300 aria-pressed:text-orange-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300">Local play</button>
+        <button id="mode-online" type="button" aria-expanded="false" aria-controls="online-panel" class="min-h-11 rounded-md border border-stone-600 px-5 font-semibold hover:bg-stone-800 aria-expanded:border-orange-300 aria-expanded:text-orange-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300">Online</button>
+      </nav>
+
+      <section id="online-panel" hidden aria-labelledby="online-title" class="mb-5 border-y border-stone-700 py-5">
+        <h2 id="online-title" class="text-xl font-semibold">Play together, on one screen</h2>
+        <p class="mt-2 max-w-3xl text-sm leading-6 text-stone-300">The host runs the game and shares its picture and sound. Guests need only a lobby code and a keyboard or gamepad.</p>
+        <div id="lobby-options" class="mt-4 flex flex-wrap gap-3">
+          <button id="create-lobby" type="button" class="min-h-11 rounded-md bg-orange-300 px-5 font-bold text-orange-950 hover:bg-orange-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300 disabled:opacity-40">Create Lobby</button>
+          <button id="show-join" type="button" aria-expanded="false" aria-controls="join-form" class="min-h-11 rounded-md border border-stone-600 px-5 font-semibold hover:bg-stone-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300 disabled:opacity-40">Join Lobby</button>
+        </div>
+        <form id="join-form" hidden class="mt-4 flex flex-wrap items-end gap-3">
+          <div>
+            <label for="lobby-code" class="mb-2 block text-sm font-semibold">Lobby code</label>
+            <input id="lobby-code" name="code" maxlength="6" minlength="6" pattern="[a-fA-F0-9]{6}" required autocomplete="off" spellcheck="false" placeholder="A1B2C3" class="min-h-11 w-44 rounded-md border border-stone-600 bg-stone-900 px-3 font-mono text-lg uppercase focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300">
+          </div>
+          <button id="join-lobby" type="submit" class="min-h-11 rounded-md bg-orange-300 px-5 font-bold text-orange-950 hover:bg-orange-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300 disabled:opacity-40">Join game</button>
+        </form>
+        <div id="active-lobby" hidden class="mt-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <p class="text-sm">Lobby <strong id="active-code" class="ml-2 font-mono text-xl text-orange-200"></strong></p>
+            <button id="copy-invite" type="button" class="min-h-11 rounded-md border border-stone-600 px-4 text-sm hover:bg-stone-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300">Copy invite link</button>
+            <button id="leave-lobby" type="button" class="min-h-11 rounded-md border border-stone-600 px-4 text-sm hover:bg-stone-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300">Leave lobby</button>
+          </div>
+          <label for="invite-link" class="mt-3 block text-sm text-stone-300">Invite link</label>
+          <input id="invite-link" type="text" readonly class="mt-2 min-h-11 w-full min-w-0 rounded-md border border-stone-600 bg-stone-900 px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300">
+          <ul id="lobby-players" aria-label="Lobby players" class="mt-4 grid gap-2 text-sm sm:grid-cols-2"></ul>
+          <p id="host-help" hidden class="mt-3 text-sm leading-6 text-stone-300">You are Player 1. Keep this tab visible, then choose a multiplayer mode and the player count in the game. Guests control Players 2–4.</p>
+        </div>
+        <p id="online-status" role="status" aria-live="polite" class="mt-4 text-sm font-medium text-orange-200">Create a lobby after starting your game, or join a friend without a disc.</p>
+      </section>
+
+      <section id="local-setup" aria-label="Launch game" class="mb-5 border-y border-stone-700 py-5">
+        <div class="flex flex-wrap items-end gap-4">
+          <div class="min-w-0 flex-1 basis-72">
+            <label for="disc" class="mb-2 block text-sm font-semibold">Your game disc (.bin)</label>
+            <input id="disc" type="file" accept=".bin" aria-describedby="disc-help"
+              class="block min-h-11 w-full min-w-0 rounded-md border border-stone-600 bg-stone-900 text-sm text-stone-300 file:mr-3 file:min-h-11 file:cursor-pointer file:border-0 file:bg-stone-700 file:px-4 file:font-semibold file:text-stone-100 hover:file:bg-stone-600 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300 disabled:opacity-50">
+          </div>
+          <button id="start" type="button" disabled
+            class="min-h-11 rounded-md bg-orange-300 px-7 font-bold text-orange-950 hover:bg-orange-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300 disabled:cursor-not-allowed disabled:opacity-40">Start game</button>
+        </div>
+        <p id="disc-help" class="mt-3 max-w-3xl text-sm leading-6 text-stone-300">Select your NTSC-U Crash Team Racing raw disc image (MODE2/2352). The file stays in this browser and is never uploaded. A keyboard or gamepad is required.</p>
+        <p id="status" role="status" aria-live="polite" class="mt-3 text-sm font-medium text-orange-200">Choose your disc to play locally, or open Online to join a lobby.</p>
+        <noscript><p class="mt-3 text-orange-200">Enable JavaScript to load the game.</p></noscript>
+      </section>
+
+      <section aria-label="Game screen">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <p id="screen-label" class="text-sm text-stone-300">Select a disc to get on the grid.</p>
+          <button id="fullscreen" type="button" disabled
+            class="min-h-11 rounded-md border border-stone-600 px-4 text-sm font-medium hover:bg-stone-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300 disabled:cursor-not-allowed disabled:opacity-40">Fullscreen</button>
+        </div>
+        <canvas id="canvas" width="800" height="600" tabindex="0" aria-label="Crash Team Racing game screen. Click to focus keyboard controls."
+          class="mx-auto block aspect-[4/3] h-auto w-full max-w-[800px] bg-black focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300 [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:max-w-none [&:fullscreen]:object-contain"></canvas>
+        <video id="guest-video" hidden autoplay playsinline muted tabindex="0" aria-label="Host's shared game screen. Focus here to send your keyboard controls."
+          class="mx-auto block aspect-[4/3] h-auto w-full max-w-[800px] bg-black object-contain focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300 [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:max-w-none"></video>
+        <button id="guest-audio" hidden type="button" class="mx-auto mt-3 block min-h-11 rounded-md border border-stone-600 px-5 text-sm font-semibold hover:bg-stone-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300">Enable game audio</button>
+      </section>
+
+      <section aria-labelledby="controls-title" class="mt-7 border-t border-stone-700 pt-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <h2 id="controls-title" class="text-xl font-semibold">Take the wheel</h2>
+          <label id="keyboard-player-label" class="flex items-center gap-3 text-sm" for="keyboard-player">Keyboard player
+            <select id="keyboard-player" disabled class="min-h-11 rounded-md border border-stone-600 bg-stone-900 px-3 text-stone-100 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-300 disabled:opacity-40">
+              <option value="0">Player 1</option><option value="1">Player 2</option>
+              <option value="2">Player 3</option><option value="3">Player 4</option>
+            </select>
+          </label>
+        </div>
+        <dl class="mt-4 grid grid-cols-2 gap-x-8 gap-y-3 text-sm sm:grid-cols-4">
+          <div><dt class="text-stone-400">Steer / navigate</dt><dd class="mt-1 font-medium">Arrow keys</dd></div>
+          <div><dt class="text-stone-400">Accelerate / confirm</dt><dd class="mt-1 font-medium">C</dd></div>
+          <div><dt class="text-stone-400">Brake / reverse</dt><dd class="mt-1 font-medium">X</dd></div>
+          <div><dt class="text-stone-400">Use item / back</dt><dd class="mt-1 font-medium">V</dd></div>
+          <div><dt class="text-stone-400">Hop / drift</dt><dd class="mt-1 font-medium">Left / right Shift</dd></div>
+          <div><dt class="text-stone-400">Change view</dt><dd class="mt-1 font-medium">Z</dd></div>
+          <div><dt class="text-stone-400">Start / pause</dt><dd class="mt-1 font-medium">Enter</dd></div>
+          <div><dt id="multiplayer-label" class="text-stone-400">Local multiplayer</dt><dd id="multiplayer-value" class="mt-1 font-medium">Up to 4 gamepads</dd></div>
+        </dl>
+        <p id="controls-help" class="mt-5 max-w-3xl text-sm leading-6 text-stone-300">Press a button to connect a gamepad, then select a multiplayer mode in the game. Click the game screen to use the keyboard. In-game memory-card saves are kept in this browser when storage is available.</p>
+      </section>
+      <footer class="mt-8 text-sm text-stone-400">All playable characters are unlocked. Online guests share the host's game and screen.</footer>
+    </main>
+  </body>
+</html>

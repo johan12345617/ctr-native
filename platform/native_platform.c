@@ -3,7 +3,7 @@
 #include <macros.h>
 
 #include "platform/native_audio.h"
-#include "platform/native_glad.h"
+#include "platform/native_gl.h"
 #include "platform/native_gpu.h"
 #include "platform/native_input.h"
 #include "platform/native_log.h"
@@ -17,6 +17,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
 
 SDL_Window *g_window = NULL;
 int g_dbg_polygonSelected = 0;
@@ -240,6 +243,9 @@ void Platform_Init(const char *title, int width, int height)
 
 	Platform_Log("[CTR Native] Initialising platform\n");
 
+#if defined(__EMSCRIPTEN__)
+	SDL_SetHint(SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT, "#canvas");
+#endif
 	if (SDL_Init(SDL_INIT_VIDEO) == 0)
 	{
 		Platform_LogError("[CTR Native] Failed to initialise SDL\n");
@@ -582,6 +588,16 @@ internal void Native_EnsureVBlankTarget(void)
 
 internal void Native_WaitUntilVBlankTarget(void)
 {
+#if defined(__EMSCRIPTEN__)
+	// Yield the original game stack, including retail loading loops.
+	const u64 freq = SDL_GetPerformanceFrequency();
+	do
+	{
+		const u64 now = SDL_GetPerformanceCounter();
+		const u64 remaining = now < s_nextVBlankCounter ? s_nextVBlankCounter - now : 0;
+		emscripten_sleep((unsigned int)((remaining * 1000) / freq));
+	} while (SDL_GetPerformanceCounter() < s_nextVBlankCounter);
+#else
 	const u64 freq = SDL_GetPerformanceFrequency();
 	const u64 spinWindow = Native_CounterFromMicroseconds(freq, NATIVE_VSYNC_SPIN_US);
 
@@ -622,6 +638,7 @@ internal void Native_WaitUntilVBlankTarget(void)
 			SDL_DelayPrecise(sleepUs * 1000ull);
 		}
 	}
+#endif
 }
 
 internal void Native_EmitVBlank(void)

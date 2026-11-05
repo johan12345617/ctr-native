@@ -594,6 +594,10 @@ LAB_Characters_DrawWindows_End:
 }
 void MM_Characters_SetMenuLayout(void)
 {
+#ifdef CTR_NATIVE
+	// Also expand the roster when an older, partially unlocked save is loaded.
+	GAME_PROGRESS.unlocks[0] |= UNLOCK_CHARACTERS;
+#endif
 	struct GameProgress *progress;
 	struct CharacterSelectMeta *meta1P2P;
 	u32 *unlockWord;

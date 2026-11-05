@@ -18,9 +18,11 @@ if(CMAKE_C_COMPILER_ID STREQUAL "MSVC" OR CMAKE_C_SIMULATE_ID STREQUAL "MSVC")
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE NEVER)
-set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY NEVER)
-set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE NEVER)
+if(NOT EMSCRIPTEN)
+    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE NEVER)
+    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY NEVER)
+    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE NEVER)
+endif()
 
 execute_process(
     COMMAND git rev-parse --short=12 HEAD
@@ -74,7 +76,7 @@ set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
 set(SDL_TRAY OFF CACHE BOOL "" FORCE)
 set(SDL_POWER OFF CACHE BOOL "" FORCE)
 set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
-set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
+set(SDL_OPENGLES ${EMSCRIPTEN} CACHE BOOL "" FORCE)
 set(SDL_OFFSCREEN OFF CACHE BOOL "" FORCE)
 set(SDL_SNDIO OFF CACHE BOOL "" FORCE)
 set(SDL_SNDIO_SHARED OFF CACHE BOOL "" FORCE)
@@ -95,7 +97,7 @@ set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT ctr_native)
 target_include_directories(ctr_native PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_compile_definitions(ctr_native PRIVATE
     CTR_NATIVE
-    CTR_INTERNAL
+    $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:CTR_INTERNAL>
     CTR_NATIVE_VERSION=\"${CTR_NATIVE_VERSION}\"
     CTR_NATIVE_BUILD_ID=\"${CTR_NATIVE_BUILD_ID}\"
 )
@@ -112,7 +114,7 @@ if(CTR_NATIVE_MSVC_FRONTEND)
     )
 else()
     target_compile_options(ctr_native PRIVATE
-        -msse
+        $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:-msse>
         -Wenum-conversion
         -Wenum-compare
         -Wswitch-enum
@@ -137,8 +139,19 @@ if(MINGW)
     target_link_options(ctr_native PRIVATE -static)
 endif()
 
+if(EMSCRIPTEN)
+    include(cmake/Web.cmake)
+endif()
+
 include(CTest)
-if(BUILD_TESTING)
+if(BUILD_TESTING AND NOT EMSCRIPTEN)
+    add_executable(ctr_remote_input_smoke tests/remote_input_smoke.c platform/native_input.c)
+    target_include_directories(ctr_remote_input_smoke PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    target_compile_definitions(ctr_remote_input_smoke PRIVATE CTR_NATIVE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(ctr_remote_input_smoke PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
+    target_link_libraries(ctr_remote_input_smoke PRIVATE SDL3::SDL3)
+    add_test(NAME ctr_remote_input_smoke COMMAND $<TARGET_FILE:ctr_remote_input_smoke>)
+
     add_test(NAME ctr_native_version COMMAND $<TARGET_FILE:ctr_native> --version)
     set_tests_properties(ctr_native_version PROPERTIES PASS_REGULAR_EXPRESSION "^CTR Native ")
 

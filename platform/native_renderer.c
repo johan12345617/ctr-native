@@ -9,7 +9,7 @@
 #include <SDL3/SDL.h>
 
 #include "platform/native_gpu.h"
-#include "platform/native_glad.h"
+#include "platform/native_gl.h"
 #include "platform/native_log.h"
 #include "platform/native_perf.h"
 #include "platform/native_renderer.h"
@@ -187,6 +187,16 @@ internal int NativeRenderer_InitialiseGLContext(char *windowName, int fullscreen
 		return 0;
 	}
 
+#if defined(__EMSCRIPTEN__)
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+	if (!SDL_GL_CreateContext(g_window))
+	{
+		NATIVE_RENDERER_ERROR("WebGL2 context creation failed: %s\n", SDL_GetError());
+		return 0;
+	}
+#else
 	int major_version = 3;
 	int minor_version = 3;
 	int profile = SDL_GL_CONTEXT_PROFILE_CORE;
@@ -212,12 +222,14 @@ internal int NativeRenderer_InitialiseGLContext(char *windowName, int fullscreen
 		NATIVE_RENDERER_ERROR("%s\n", "Failed to initialise - OpenGL 3.x is not supported. Please update video drivers.");
 		return 0;
 	}
+#endif
 
 	return 1;
 }
 
 internal int NativeRenderer_InitialiseGLExt(void)
 {
+#if !defined(__EMSCRIPTEN__)
 	GLenum err = gladLoadGL();
 
 	if (err == 0)
@@ -225,6 +237,7 @@ internal int NativeRenderer_InitialiseGLExt(void)
 		return 0;
 	}
 
+#endif
 	const char *rend = (const char *)glGetString(GL_RENDERER);
 	const char *vendor = (const char *)glGetString(GL_VENDOR);
 	NATIVE_RENDERER_LOG("*Video adapter: %s by %s\n", rend, vendor);
@@ -917,20 +930,26 @@ internal int NativeRenderer_Shader_CheckProgramStatus(GLuint program)
 
 internal ShaderID NativeRenderer_Shader_Compile(const char *source, bool isPsxShader)
 {
-	const char *GLSL_HEADER_VERT = "	#version 140\n"
+#if defined(__EMSCRIPTEN__)
+#define NATIVE_GLSL_VERSION "#version 300 es\n"
+#else
+#define NATIVE_GLSL_VERSION "#version 140\n"
+#endif
+	const char *GLSL_HEADER_VERT = NATIVE_GLSL_VERSION
 	                               "	precision lowp  int;\n"
 	                               "	precision highp float;\n"
 	                               "	#define varying   out\n"
 	                               "	#define attribute in\n"
 	                               "	#define texture2D texture\n";
 
-	const char *GLSL_HEADER_FRAG = "	#version 140\n"
+	const char *GLSL_HEADER_FRAG = NATIVE_GLSL_VERSION
 	                               "	precision lowp  int;\n"
 	                               "	precision highp float;\n"
 	                               "	#define varying     in\n"
 	                               "	#define texture2D   texture\n"
 	                               "	out vec4 fragColor;\n";
 
+#undef NATIVE_GLSL_VERSION
 	char extra_vs_defines[1024];
 	char extra_fs_defines[1024];
 	extra_vs_defines[0] = 0;
@@ -1811,10 +1830,26 @@ internal void NativeRenderer_SyncGpuVRAMToCPU(int x, int y, int w, int h)
 	glGetIntegerv(GL_PACK_ALIGNMENT, &previousPackAlignment);
 
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, s_glVramFramebuffer);
+#if defined(__EMSCRIPTEN__)
+	// WebGL2 guarantees RGBA/UNSIGNED_BYTE readback, including RG8 targets.
+	static u8 webReadback[VRAM_WIDTH * VRAM_HEIGHT * 4];
+	glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
+	glReadPixels(readRect.x, readRect.y, readRect.w, readRect.h, GL_RGBA, GL_UNSIGNED_BYTE, webReadback);
+	for (int y = 0; y < readRect.h; y++)
+	{
+		for (int x = 0; x < readRect.w; x++)
+		{
+			const u8 *pixel = &webReadback[((size_t)y * readRect.w + x) * 4];
+			s_vram.cpuPixels[(size_t)(readRect.y + y) * VRAM_WIDTH + readRect.x + x] = (u16)(pixel[0] | (pixel[1] << 8));
+		}
+	}
+#else
 	glPixelStorei(GL_PACK_ROW_LENGTH, VRAM_WIDTH);
 	glPixelStorei(GL_PACK_ALIGNMENT, sizeof(u16));
 	glReadPixels(readRect.x, readRect.y, readRect.w, readRect.h, VRAM_FORMAT, GL_UNSIGNED_BYTE,
 	             s_vram.cpuPixels + (size_t)readRect.y * VRAM_WIDTH + readRect.x);
+#endif
 
 	for (int tileY = tileY0; tileY <= tileY1; tileY++)
 	{
@@ -2232,7 +2267,11 @@ internal void NativeRenderer_SetViewPort(int x, int y, int width, int height)
 
 internal void NativeRenderer_SetWireframe(int enable)
 {
+#if defined(__EMSCRIPTEN__)
+	(void)enable;
+#else
 	glPolygonMode(GL_FRONT_AND_BACK, enable ? GL_LINE : GL_FILL);
+#endif
 }
 
 void NativeRenderer_UpdateVertexBuffer(const GrVertex *vertices, int num_vertices)
@@ -2262,18 +2301,24 @@ void NativeRenderer_DrawTriangles(int start_vertex, int triangles)
 
 void NativeRenderer_PushDebugLabel(const char *label)
 {
+#if defined(__EMSCRIPTEN__)
+	(void)label;
+#else
 	if (!GLAD_GL_KHR_debug)
 	{
 		return;
 	}
 	glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0x8000, strlen(label), label);
+#endif
 }
 
 void NativeRenderer_PopDebugLabel(void)
 {
+#if !defined(__EMSCRIPTEN__)
 	if (!GLAD_GL_KHR_debug)
 	{
 		return;
 	}
 	glPopDebugGroup();
+#endif
 }

@@ -22,6 +22,12 @@ void Platform_InputControllerAdded(int deviceIndex);
 void Platform_InputControllerRemoved(int instanceId);
 int Platform_InputCycleKeyboardController(void);
 int Platform_InputCycleGamepadController(void);
+// Remote pads override only their assigned slot; all other pads stay local.
+// Buttons use a pressed-bit PSX mask; axes are bytes centered at 128.
+int Platform_InputSetRemotePad(int slot, unsigned int buttons, int rightX, int rightY, int leftX, int leftY);
+int Platform_InputClearRemotePad(int slot);
+int Platform_InputSetKeyboardPlayer(int slot);
+int Platform_InputGetKeyboardPlayer(void);
 
 void Platform_InputPadInit(int slot, unsigned char *padData);
 int Platform_InputPadGetState(int port);
