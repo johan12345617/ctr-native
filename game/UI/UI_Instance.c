@@ -1,4 +1,5 @@
 #include <common.h>
+#include "UI_OnlineHud.h"
 
 enum UIInstanceConstants
 {
@@ -54,6 +55,9 @@ struct Instance *UI_INSTANCE_BirthWithThread(int modelID, int tickFunc, int hudS
 	}
 
 	hudStruct = data.hudStructPtr[gGT->numPlyrCurrGame - 1];
+#ifdef CTR_NATIVE
+	if (NativeOnline_IsActive()) hudStruct = data.hudStructPtr[0];
+#endif
 	driverThread = gGT->threadBuckets[PLAYER].thread;
 
 	while (driverThread != 0)
@@ -222,6 +226,9 @@ struct Instance *UI_INSTANCE_BirthWithThread(int modelID, int tickFunc, int hudS
 		// next thread
 		driverThread = driverThread->siblingThread;
 
+#ifdef CTR_NATIVE
+		if (!NativeOnline_IsActive())
+#endif
 		hudStruct += UI_HUD_SLOT_COUNT;
 	}
 
@@ -370,7 +377,7 @@ void UI_INSTANCE_InitAll(void)
 
 	// used for multiplayer wumpa
 	sdata->ptrPushBufferUI = (int)NULL;
-	if (gGT->numPlyrCurrGame >= 2)
+	if (UI_PRESENTATION_PLAYERS(gGT->numPlyrCurrGame) >= 2)
 	{
 		sdata->ptrPushBufferUI = (int)&sdata->pushBuffer_DecalMP;
 	}
@@ -384,7 +391,7 @@ void UI_INSTANCE_InitAll(void)
 	sdata->ptrFruitDisp = (int)UI_INSTANCE_BirthWithThread(STATIC_FRUITDISP, (int)UI_ThTick_CountPickup, UI_HUD_SLOT_FRUIT_MODEL, 1, sdata->ptrPushBufferUI,
 	                                                       (int)rdata.s_fruitdisp);
 
-	if ((gGT->numPlyrCurrGame < 3) &&
+	if ((UI_PRESENTATION_PLAYERS(gGT->numPlyrCurrGame) < 3) &&
 
 	    // If you're not in Battle Mode
 	    ((gameMode1 & BATTLE_MODE) == 0))

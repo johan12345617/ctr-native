@@ -15,8 +15,9 @@ target_link_options(ctr_native PRIVATE
     -sMODULARIZE=1
     -sEXPORT_NAME=createCTRModule
     -sENVIRONMENT=web
-    "-sEXPORTED_RUNTIME_METHODS=['FS','IDBFS','callMain']"
-    "-sEXPORTED_FUNCTIONS=['_main','_CTR_WebSetPad','_CTR_WebClearPad','_CTR_WebSetKeyboardPlayer','_CTR_WebGetKeyboardPlayer']"
+    -sEXIT_RUNTIME=0
+    "-sEXPORTED_RUNTIME_METHODS=['FS','IDBFS','callMain','HEAPU8']"
+    "-sEXPORTED_FUNCTIONS=['_main','_malloc','_free','_CTR_WebSetPad','_CTR_WebClearPad','_CTR_WebSetKeyboardPlayer','_CTR_WebGetKeyboardPlayer']"
     -lidbfs.js
 )
 
@@ -30,12 +31,12 @@ add_custom_command(
     COMMAND "${CTR_NODE_EXECUTABLE}" "${CTR_TAILWIND_CLI}"
         --input "${CMAKE_SOURCE_DIR}/web/styles.css"
         --output "${CMAKE_BINARY_DIR}/styles.css" --minify
-    DEPENDS web/styles.css web/index.html web/app.js web/online.js
+    DEPENDS web/styles.css web/index.html web/app.js web/online.js web/online-v2-lobby.js web/online-v2-engine.js
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/web"
     VERBATIM
 )
 add_custom_target(ctr_web_styles DEPENDS "${CMAKE_BINARY_DIR}/styles.css")
 add_dependencies(ctr_native ctr_web_styles)
-foreach(web_file index.html app.js online.js input.js)
+foreach(web_file index.html app.js online.js input.js online-v2-client.js online-v2-protocol.mjs online-v2-runtime.mjs online-v2-prediction.mjs online-v2-latency.mjs online-v2-lobby.js online-v2-engine.js)
     configure_file("web/${web_file}" "${CMAKE_BINARY_DIR}/${web_file}" COPYONLY)
 endforeach()

@@ -2206,8 +2206,17 @@ int NativeCheckpoint_Restore(const void *src, int srcSize)
 
 	PSX_BIOS_SetRandSeed(header->psxRandSeed);
 	Platform_ConfigureMempackArena();
-	NativeCheckpoint_RelocateMempackPointers(header, &liveHeader);
-	NativeCheckpoint_RelocateRuntimePointers(header, &liveHeader);
+	// Same-process rollback restores the exact same backing regions and code.
+	// Walking every object to translate each pointer to itself is unnecessary.
+	// File/cross-process restoration still takes the original relocation path
+	// whenever any recorded range or code anchor differs.
+	if (header->codeAnchor != liveHeader.codeAnchor ||
+	    memcmp(header->addressRanges, liveHeader.addressRanges,
+	           header->addressRangeCount * sizeof(header->addressRanges[0])) != 0)
+	{
+		NativeCheckpoint_RelocateMempackPointers(header, &liveHeader);
+		NativeCheckpoint_RelocateRuntimePointers(header, &liveHeader);
+	}
 	if (pointerMapRegion == NULL)
 	{
 		return 0;

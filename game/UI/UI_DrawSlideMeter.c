@@ -1,4 +1,5 @@
 #include <common.h>
+#include "UI_OnlineHud.h"
 
 enum
 {
@@ -27,7 +28,7 @@ void UI_DrawSlideMeter(s16 posX, s16 posY, struct Driver *driver)
 
 	meterLength = 0;
 	barHeight = UI_SLIDE_METER_BAR_H_FULL;
-	if (GAME_TRACKER->numPlyrCurrGame >= UI_SLIDE_METER_SPLIT_PLAYER_COUNT)
+	if (UI_PRESENTATION_PLAYERS(GAME_TRACKER->numPlyrCurrGame) >= UI_SLIDE_METER_SPLIT_PLAYER_COUNT)
 	{
 		barHeight = UI_SLIDE_METER_BAR_H_SPLIT;
 	}

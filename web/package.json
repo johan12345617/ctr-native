@@ -6,7 +6,16 @@
   "scripts": {
     "build:css": "tailwindcss -i styles.css -o ../build-web/styles.css --minify",
     "start": "node server.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "start:online-v2": "node server.mjs --online-v2",
+    "test": "node --test tests/*.test.mjs",
+    "online:v2:probe": "node online-v2-probe.mjs",
+    "online:v2:prediction-probe": "node online-v2-prediction-probe.mjs",
+    "online:v2:powerups-probe": "node online-v2-powerups-probe.mjs",
+    "online:v2:world-probe": "node online-v2-world-probe.mjs",
+    "online:v2:camera-probe": "node online-v2-camera-probe.mjs",
+    "online:v2:lobby-probe": "node online-v2-lobby-probe.mjs",
+    "online:v2:engine-probe": "node online-v2-engine-probe.mjs",
+    "online:v2:modes-probe": "node online-v2-modes-probe.mjs"
   },
   "dependencies": { "ws": "8.22.1" },
   "devDependencies": {

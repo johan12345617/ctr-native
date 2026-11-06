@@ -177,7 +177,11 @@ void MM_TrackSelect_Video_Draw(RECT *r, struct MainMenu_LevelRow *selectMenu, s1
 	selectedMenu = (struct MainMenu_LevelRow *)((u32)(trackIndex * sizeof(*selectedMenu)) + (u32)selectMenu);
 	videoFileIndex = selectedMenu->previewVideoFileIndex;
 
-	if ((bigfileEntries[videoFileIndex].size != 0) && (r->x >= 0) && (r->y >= 0) && ((r->x + r->w) < (MM_TRACK_VIDEO_SCREEN_W + 1)) &&
+	if (
+#ifdef CTR_NATIVE
+	    !NativeOnline_IsActive() &&
+#endif
+	    (bigfileEntries[videoFileIndex].size != 0) && (r->x >= 0) && (r->y >= 0) && ((r->x + r->w) < (MM_TRACK_VIDEO_SCREEN_W + 1)) &&
 	    ((r->y + r->h) < (MM_TRACK_VIDEO_SCREEN_H + 1)))
 #ifdef CTR_NATIVE
 	{

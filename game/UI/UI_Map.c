@@ -1,4 +1,5 @@
 #include <common.h>
+#include "UI_OnlineHud.h"
 
 #ifndef UI_MAP_COLORS
 #define UI_MAP_COLORS       data.ptrColor
@@ -188,11 +189,18 @@ void UI_Map_GetIconPos(struct UIMap *map, s32 *posX, s32 *posY)
 		screenX = map->iconStartX + (s32)((u32)*posY * map->iconSizeX) / worldRangeY;
 	}
 
-	if (GAME_TRACKER->numPlyrCurrGame == 3)
+	if (UI_PRESENTATION_PLAYERS(GAME_TRACKER->numPlyrCurrGame) == 3)
 	{
 		screenX -= UI_MAP_3P_OFFSET_X;
 		screenY += UI_MAP_3P_OFFSET_Y;
 	}
+#ifdef CTR_NATIVE
+	if (NativeOnline_IsActive())
+	{
+		int x, y; NativeOnline_MapAnchor(&x, &y);
+		screenX += x - 500; screenY += y - 195;
+	}
+#endif
 
 	*posX = screenX;
 	*posY = screenY;
@@ -262,7 +270,7 @@ void UI_Map_DrawDrivers(struct UIMap *map, struct Thread *bucket, s16 *driverIco
 	{
 		gGT = GAME_TRACKER;
 		inst = bucket->inst;
-		if (gGT->numPlyrCurrGame != 1 && gGT->numPlyrCurrGame != 3)
+		if (UI_PRESENTATION_PLAYERS(gGT->numPlyrCurrGame) != 1 && gGT->numPlyrCurrGame != 3)
 		{
 			continue;
 		}

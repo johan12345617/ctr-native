@@ -11,6 +11,7 @@
 #include "platform/native_renderer.h"
 #include "platform/native_replay_scheduler.h"
 #include "platform/native_savestate.h"
+#include "platform/native_online.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -157,6 +158,7 @@ internal void Platform_UpdateHostAltKeyState(const s32 key, const s8 down)
 #if defined(CTR_INTERNAL)
 internal void Platform_TakeScreenshot(void)
 {
+#if !defined(CTR_HEADLESS)
 	u8 *pixels = (u8 *)malloc(g_windowWidth * g_windowHeight * 4);
 
 	glReadPixels(0, 0, g_windowWidth, g_windowHeight, GL_BGRA, GL_UNSIGNED_BYTE, pixels);
@@ -167,6 +169,7 @@ internal void Platform_TakeScreenshot(void)
 	SDL_DestroySurface(surface);
 
 	free(pixels);
+#endif
 }
 #endif
 
@@ -245,8 +248,17 @@ void Platform_Init(const char *title, int width, int height)
 
 #if defined(__EMSCRIPTEN__)
 	SDL_SetHint(SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT, "#canvas");
+	// An externally stepped simulation returns to JS after each iteration.
+	// SDL's swap-time Asyncify unwind would split a synchronous OnlineStep call.
+	if (NativeOnline_IsScheduled()) SDL_SetHint(SDL_HINT_EMSCRIPTEN_ASYNCIFY, "0");
 #endif
-	if (SDL_Init(SDL_INIT_VIDEO) == 0)
+	if (SDL_Init(
+#if defined(CTR_HEADLESS)
+	    0
+#else
+	    SDL_INIT_VIDEO
+#endif
+	) == 0)
 	{
 		Platform_LogError("[CTR Native] Failed to initialise SDL\n");
 		Platform_LogShutdown();
@@ -317,10 +329,17 @@ int Platform_BeginScene(void)
 	}
 
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_PLATFORM_BEGIN_SCENE);
+	if (!NativeOnline_ShouldPresent())
+	{
+		s_platformBeginScene = 1;
+		NativePerf_EndScope(NATIVE_PERF_BUCKET_PLATFORM_BEGIN_SCENE);
+		return 1;
+	}
 	// NOTE(aalhendi): CTR already throttles through the retail VSync/draw-sync
 	// path. Do not add a second SDL swap wait; some GL drivers charge that wait
 	// to the next frame's first clear instead of SDL_GL_SwapWindow.
 	NativeRenderer_UpdateSwapIntervalState(0);
+	NativeGpu_BeginOnlineFrame();
 
 	NativeRenderer_BeginScene();
 
@@ -351,6 +370,11 @@ void Platform_EndScene(void)
 
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_PLATFORM_END_SCENE);
 	s_platformBeginScene = 0;
+	if (!NativeOnline_ShouldPresent())
+	{
+		NativePerf_EndScope(NATIVE_PERF_BUCKET_PLATFORM_END_SCENE);
+		return;
+	}
 
 	NativeRenderer_EndScene();
 
@@ -657,6 +681,7 @@ internal void Native_EmitVBlank(void)
 internal int Native_CatchUpDueVBlanks(void)
 {
 	int emittedVBlanks = 0;
+	if (NativeOnline_IsScheduled()) return 0;
 
 	Native_EnsureVBlankTarget();
 
@@ -708,6 +733,11 @@ internal int Native_CatchUpDueVBlanks(void)
 
 internal void Native_WaitAndEmitVBlank(void)
 {
+	if (NativeOnline_IsScheduled())
+	{
+		Native_EmitVBlank();
+		return;
+	}
 	Native_EnsureVBlankTarget();
 	Native_WaitUntilVBlankTarget();
 	Native_EmitVBlank();

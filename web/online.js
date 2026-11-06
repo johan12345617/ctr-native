@@ -1,14 +1,16 @@
-import { KEY_BUTTONS, readInput, validInput } from "./input.js";
+import { KEY_BUTTONS, BrowserGamepads, focusGamepadScreen, validInput } from "./input.js";
 
-export function initOnline(host, onRoleChange) {
+export function initOnline(host, onRoleChange, { onModeRequest } = {}) {
   const $ = id => document.getElementById(id);
   const video = $("guest-video");
   const peers = new Map();
   const keys = new Set();
+  const gamepads = new BrowserGamepads();
   let socket, role = null, code = "", myId, mySlot, hostId, stream, busy = false;
   let iceServers = [], players = [], sequence = 0, queue = Promise.resolve();
   const showStatus = message => { $("online-status").textContent = message; };
   function showOnline() {
+    if (onModeRequest?.("stream") === false) return;
     $("online-panel").hidden = false;
     $("mode-online").setAttribute("aria-expanded", "true");
     $("mode-local").setAttribute("aria-pressed", "false");
@@ -205,12 +207,15 @@ export function initOnline(host, onRoleChange) {
     if (role !== "guest") return;
     const channel = peers.get(hostId)?.channel;
     if (channel?.readyState !== "open" || channel.bufferedAmount > 4096) return;
-    const input = readInput(keys, navigator.getGamepads?.() || [], forceNeutral || document.hidden || !document.hasFocus() || document.activeElement !== video);
+    const neutral = forceNeutral || document.hidden || !document.hasFocus();
+    const input = gamepads.read(document.activeElement === video ? keys : [], undefined, neutral);
+    if (!neutral) focusGamepadScreen(video, gamepads.previous.get(gamepads.selectedIndex) || { buttons: 0, axes: [128, 128, 128, 128] });
     channel.send(JSON.stringify({ type: "input", seq: sequence++, ...input }));
   }
   $("mode-online").addEventListener("click", showOnline);
   $("mode-local").addEventListener("click", () => {
     if (code || busy) { showStatus("Leave or close your lobby before returning to local play."); return; }
+    if (onModeRequest?.("local") === false) return;
     $("online-panel").hidden = true;
     $("mode-online").setAttribute("aria-expanded", "false");
     $("mode-local").setAttribute("aria-pressed", "true");
@@ -288,4 +293,5 @@ export function initOnline(host, onRoleChange) {
     showStatus("Your invite is ready. Click Join game to connect.");
   }
   render();
+  return { get active() { return !!code || busy; } };
 }

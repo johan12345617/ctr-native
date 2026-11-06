@@ -13,6 +13,7 @@
 #include "platform/native_log.h"
 #include "platform/native_perf.h"
 #include "platform/native_renderer.h"
+#include "platform/native_online.h"
 
 #include <assert.h>
 #include <string.h>
@@ -2171,6 +2172,7 @@ void NativeRenderer_PresentVRAMDisplay(void)
 
 void NativeRenderer_SwapWindow(void)
 {
+	if (!NativeOnline_ShouldPresent()) return;
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_SWAP_WINDOW);
 	SDL_GL_SwapWindow(g_window);
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_SWAP_WINDOW);

@@ -85,7 +85,11 @@ void UI_DrawRankedDrivers(void)
 	struct GameTracker *gGT = sdata->gGT;
 	int numPlyr = gGT->numPlyrCurrGame;
 
-	if (numPlyr == 1)
+	if (numPlyr == 1
+#ifdef CTR_NATIVE
+	    || NativeOnline_IsActive()
+#endif
+	)
 	{
 		// Number of racers that have finished race
 		s16 numRacersFinished = 0;
@@ -124,6 +128,9 @@ void UI_DrawRankedDrivers(void)
 
 		// Default for Arcade: Show 4 racers
 		int visibleRankCount = UI_RANK_VISIBLE_ARCADE_COUNT;
+#ifdef CTR_NATIVE
+		if (NativeOnline_IsActive()) visibleRankCount = numPlyr;
+#endif
 
 		if (IS_BOSS_RACE(gGT->gameMode1))
 		{
@@ -133,6 +140,10 @@ void UI_DrawRankedDrivers(void)
 
 		// height to draw rank (this bitshifts later)
 		int rankTextY = UI_RANK_TEXT_START_Y << 16;
+		int rankTextX = UI_RANK_TEXT_X;
+#ifdef CTR_NATIVE
+		if (NativeOnline_IsActive()) { rankTextX = 492; rankTextY -= 17 << 16; }
+#endif
 
 		for (int rankLineIndex = 0; rankLineIndex < visibleRankCount; rankLineIndex++)
 		{
@@ -148,7 +159,7 @@ void UI_DrawRankedDrivers(void)
 
 			// draw rank number: '1', '2', '3', '4'
 			sdata->s_spacebar[0] = (char)rankLineIndex + '1';
-			DecalFont_DrawLine(&sdata->s_spacebar[0], UI_RANK_TEXT_X, rankTextY >> 0x10, FONT_SMALL, txtColor);
+			DecalFont_DrawLine(&sdata->s_spacebar[0], rankTextX, rankTextY >> 0x10, FONT_SMALL, txtColor);
 
 			// add to Y, which mekes it lower on screen
 			rankTextY = rankTextY + (UI_RANK_TEXT_SLOT_HEIGHT << 16);
@@ -208,6 +219,9 @@ void UI_DrawRankedDrivers(void)
 					pos.y = iconPos.y;
 				}
 
+#ifdef CTR_NATIVE
+				if (NativeOnline_IsActive()) { pos.x = 480 - pos.x; pos.y -= 17; }
+#endif
 				UI_DrawDriverIcon(
 
 				    gGT->ptrIcons[data.MetaDataCharacters[data.characterIDs[driverIndex]].iconID],

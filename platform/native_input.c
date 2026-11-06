@@ -7,6 +7,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+static int s_browserGamepadMode;
+static struct PlatformInputPadSnapshot s_browserGamepads[PLATFORM_INPUT_PAD_COUNT];
+EM_JS(void, NativeInput_BrowserRumble, (int slot, int strong, int weak), {
+	if (Module['ctrGamepadRumble']) Module['ctrGamepadRumble'](slot, strong, weak);
+});
+// Browser hardware is sampled before each shell step, outside rollback state.
+EMSCRIPTEN_KEEPALIVE int CTR_WebSetGamepad(int slot, int connected, unsigned int buttons, int rx, int ry, int lx, int ly)
+{
+	if ((unsigned)slot >= PLATFORM_INPUT_PAD_COUNT || (unsigned)connected > 1 || buttons > 0xffff ||
+	    (unsigned)rx > 255 || (unsigned)ry > 255 || (unsigned)lx > 255 || (unsigned)ly > 255) return 0;
+	s_browserGamepadMode = 1;
+	struct PlatformInputPadSnapshot *pad = &s_browserGamepads[slot];
+	memset(pad, 0, sizeof(*pad));
+	pad->connected = connected;
+	pad->id = 0x73;
+	pad->buttons[0] = (u8)~buttons; pad->buttons[1] = (u8)~(buttons >> 8);
+	pad->analog[0] = rx; pad->analog[1] = ry; pad->analog[2] = lx; pad->analog[3] = ly;
+	return 1;
+}
+#endif
 
 #define NATIVE_INPUT_MAX_CONTROLLERS       PLATFORM_INPUT_PAD_COUNT
 #define NATIVE_INPUT_PHYSICAL_SLOT_COUNT   2
@@ -660,6 +682,7 @@ internal void NativeInput_CloseController(s32 slot)
 	controller->instanceId = -1;
 	controller->analogEnabled = 0;
 	controller->switchingAnalog = 0;
+	s_controllerToSlotMapping[slot] = -1;
 
 	if (s_lastActiveControllerSlot == slot)
 	{
@@ -669,6 +692,9 @@ internal void NativeInput_CloseController(s32 slot)
 
 internal void NativeInput_OpenController(SDL_JoystickID instanceId, s32 slot)
 {
+#if defined(__EMSCRIPTEN__)
+	if (s_browserGamepadMode) return;
+#endif
 	if ((slot < 0) || (slot >= NATIVE_INPUT_MAX_CONTROLLERS))
 	{
 		return;
@@ -693,6 +719,7 @@ internal void NativeInput_OpenController(SDL_JoystickID instanceId, s32 slot)
 
 	SDL_Joystick *joystick = SDL_GetGamepadJoystick(controller->controller);
 	controller->instanceId = joystick != NULL ? SDL_GetJoystickID(joystick) : instanceId;
+	s_controllerToSlotMapping[slot] = (s32)instanceId;
 	controller->analogEnabled = 1;
 	controller->switchingAnalog = 0;
 	NativeInput_MoveKeyboardOffControllerSlot(slot);
@@ -727,6 +754,7 @@ int Platform_InputInit(void)
 	for (s32 slot = 0; slot < NATIVE_INPUT_MAX_CONTROLLERS; slot++)
 	{
 		s_controllers[slot].instanceId = -1;
+		s_controllerToSlotMapping[slot] = -1;
 		NativeInput_ResetSnapshot(slot);
 		s_installedSnapshots[slot] = s_controllers[slot].snapshot;
 	}
@@ -738,6 +766,7 @@ int Platform_InputInit(void)
 	s_keyboardState = SDL_GetKeyboardState(NULL);
 	memset(s_remotePadActive, 0, sizeof(s_remotePadActive));
 
+#if !defined(CTR_HEADLESS)
 	if (SDL_InitSubSystem(SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC) == 0)
 	{
 		fprintf(stderr, "[CTR Native] Failed to initialise SDL input subsystem: %s\n", SDL_GetError());
@@ -746,6 +775,7 @@ int Platform_InputInit(void)
 
 	SDL_AddGamepadMappingsFromFile("gamecontrollerdb.txt");
 	NativeInput_OpenKnownControllers();
+#endif
 
 	s_inputInitialized = 1;
 	return 1;
@@ -798,6 +828,12 @@ void Platform_InputUpdate(void)
 	for (s32 slot = 0; slot < NATIVE_INPUT_MAX_CONTROLLERS; slot++)
 	{
 		NativeInput_ResetSnapshot(slot);
+#if defined(__EMSCRIPTEN__)
+		if (s_browserGamepadMode) {
+			if (s_browserGamepads[slot].connected) s_controllers[slot].snapshot = s_browserGamepads[slot];
+		}
+		else
+#endif
 		NativeInput_ApplyController(slot);
 		NativeInput_ApplyKeyboard(slot, keyboardButtons);
 		if (s_remotePadActive[slot])
@@ -1109,12 +1145,6 @@ void Platform_InputPadVibrate(int port, unsigned char *table, int len)
 		return;
 	}
 
-	struct NativeInputController *controller = &s_controllers[slot];
-	if (controller->controller == NULL)
-	{
-		return;
-	}
-
 	u16 freqHigh = table[0] * 255;
 	u16 freqLow = len > 1 ? table[1] * 255 : 0;
 
@@ -1128,5 +1158,12 @@ void Platform_InputPadVibrate(int port, unsigned char *table, int len)
 		freqHigh = 4096;
 	}
 
-	SDL_RumbleGamepad(controller->controller, freqLow, freqHigh, 200);
+#if defined(__EMSCRIPTEN__)
+	if (s_browserGamepadMode) {
+		NativeInput_BrowserRumble(slot, freqLow, freqHigh);
+		return;
+	}
+#endif
+	struct NativeInputController *controller = &s_controllers[slot];
+	if (controller->controller != NULL) SDL_RumbleGamepad(controller->controller, freqLow, freqHigh, 200);
 }

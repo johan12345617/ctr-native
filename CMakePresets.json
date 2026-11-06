@@ -7,6 +7,25 @@
   },
   "configurePresets": [
     {
+      "name": "online-v2-probe-release",
+      "inherits": "online-v2-release",
+      "binaryDir": "${sourceDir}/build-online-v2-probe",
+      "cacheVariables": { "CTR_ONLINE_PROBES": "ON" }
+    },
+    {
+      "name": "web-probe-release",
+      "inherits": "web-release",
+      "binaryDir": "${sourceDir}/build-web-probe",
+      "cacheVariables": { "CTR_ONLINE_PROBES": "ON" }
+    },
+    {
+      "name": "online-v2-release",
+      "displayName": "Online 2.0 headless simulation prototype",
+      "inherits": "web-release",
+      "binaryDir": "${sourceDir}/build-online-v2",
+      "cacheVariables": { "CTR_HEADLESS": "ON" }
+    },
+    {
       "name": "web-release",
       "displayName": "Browser (WebAssembly / WebGL2)",
       "generator": "Ninja",
@@ -126,6 +145,9 @@
     }
   ],
   "buildPresets": [
+    { "name": "online-v2-probe-release", "configurePreset": "online-v2-probe-release", "targets": ["ctr_native"] },
+    { "name": "web-probe-release", "configurePreset": "web-probe-release", "targets": ["ctr_native"] },
+    { "name": "online-v2-release", "configurePreset": "online-v2-release", "targets": ["ctr_native"] },
     {
       "name": "web-release",
       "configurePreset": "web-release",

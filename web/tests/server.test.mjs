@@ -2,6 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import { createLobbyServer } from "../server.mjs";
+import { mkdtemp, writeFile, unlink, rmdir } from "node:fs/promises";
+import { request } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 async function fixture(t) {
   const app = createLobbyServer({ iceServers: [] });
@@ -38,6 +42,26 @@ async function fixture(t) {
   }
   return { address, connect };
 }
+
+test("automatic disc loading streams only the configured file on loopback", async t => {
+  const directory = await mkdtemp(join(tmpdir(), "ctr-disc-"));
+  const disc = join(directory, "ctr-u.bin"); await writeFile(disc, "private-test-disc");
+  const app = createLobbyServer({ iceServers: [], localDisc: disc });
+  await new Promise(resolve => app.server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => { await app.close(); await unlink(disc); await rmdir(directory); });
+  const url = "http://127.0.0.1:" + app.server.address().port + "/local-disc";
+  const file = await fetch(url);
+  assert.equal(await file.text(), "private-test-disc");
+  assert.equal(file.headers.get("cross-origin-resource-policy"), "same-origin");
+  assert.equal(file.headers.get("cache-control"), "private, no-store");
+  assert.equal((await fetch(url, { method: "HEAD" })).headers.get("content-length"), "17");
+  assert.equal((await fetch(url, { headers: { Origin: "https://another-site.example" } })).status, 404);
+  const rebound = await new Promise((resolve, reject) => {
+    request(url, { headers: { Host: "another-site.example" } }, response => { response.resume(); resolve(response.statusCode); }).on("error", reject).end();
+  });
+  assert.equal(rebound, 404);
+  assert.equal((await fetch(url + "/../assets/ctr-u.bin")).status, 404);
+});
 
 test("lobbies assign unique slots, reject overflow and reuse released slots", async t => {
   const { connect } = await fixture(t);
@@ -95,7 +119,9 @@ test("unknown rooms and malformed requests fail without killing the server", asy
   assert.match((await guest.next("error")).message, /Invalid/);
   guest.send({ type: "join", code: "000000" });
   assert.match((await guest.next("error")).message, /not found/);
-  assert.equal((await fetch(address + "/health")).status, 200);
+  const health = await fetch(address + "/health");
+  assert.equal(health.status, 200);
+  assert.deepEqual(await health.json(), { ok: true, onlineV2: false });
   for (const path of ["/assets/ctr-u.bin", "/CMakeCache.txt", "/.git/config", "/server.mjs"]) {
     assert.equal((await fetch(address + path)).status, 404);
   }

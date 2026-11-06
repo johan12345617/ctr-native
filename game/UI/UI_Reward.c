@@ -1,4 +1,5 @@
 #include <common.h>
+#include "UI_OnlineHud.h"
 
 enum
 {
@@ -73,9 +74,14 @@ void UI_ThTick_CountPickup(struct Thread *bucket)
 
 		inst->colorRGBA = UI_REWARD_PICKUP_COLOR;
 
-		if ((gGT->numPlyrCurrGame == 1) && (inst->model->id != STATIC_TIME_CRATE_01))
+		if ((UI_PRESENTATION_PLAYERS(gGT->numPlyrCurrGame) == 1) && (inst->model->id != STATIC_TIME_CRATE_01))
 		{
-			if (gGT->drivers[0]->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
+			int owner = 0;
+#ifdef CTR_NATIVE
+			if (NativeOnline_IsActive()) for (int i = 0; i < gGT->numPlyrCurrGame; i++)
+				if (gGT->drivers[i] && gGT->drivers[i]->instFruitDisp == inst) owner = i;
+#endif
+			if (gGT->drivers[owner]->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
 			{
 				inst->alphaScale = ((s32)CTR_ReadU16LE(&sdata->wumpaShineResult) - UI_REWARD_WUMPA_SHINE_CENTER) * (1 << UI_REWARD_WUMPA_SHINE_SHIFT);
 			}

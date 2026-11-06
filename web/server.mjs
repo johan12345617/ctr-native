@@ -1,13 +1,15 @@
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import { randomBytes, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
+import { createOnlineV2Coordinator } from "./online-v2-server.mjs";
 
 const publicFiles = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
-  ...["index.html", "app.js", "online.js", "input.js", "styles.css", "ctr_native.js", "ctr_native.wasm"].map(file =>
+  ...["index.html", "app.js", "online.js", "input.js", "online-v2-client.js", "online-v2-runtime.mjs", "online-v2-protocol.mjs", "online-v2-prediction.mjs", "online-v2-latency.mjs", "online-v2-lobby.js", "online-v2-engine.js", "styles.css", "ctr_native.js", "ctr_native.wasm"].map(file =>
     ["/" + file, [file, file.endsWith(".wasm") ? "application/wasm" : file.endsWith(".css") ? "text/css" : file.endsWith(".html") ? "text/html; charset=utf-8" : "text/javascript"]]),
 ]);
 
@@ -17,6 +19,8 @@ export function createLobbyServer({
   publicOrigin,
   maxRooms = 128,
   maxClients = 512,
+  onlineV2 = false,
+  localDisc = fileURLToPath(new URL("../assets/ctr-u.bin", import.meta.url)),
 } = {}) {
   const rooms = new Map();
   const clients = new Map();
@@ -27,8 +31,32 @@ export function createLobbyServer({
       response.writeHead(405, { Allow: "GET, HEAD" }).end(); return;
     }
     const pathname = new URL(request.url, "http://localhost").pathname;
+    if (pathname === "/local-disc") {
+      // Explicit development convenience: only this disc, only the local
+      // machine. Remote players still select their own disc in the browser.
+      const peer = request.socket.remoteAddress;
+      let localHost = false;
+      try { localHost = ["localhost", "127.0.0.1", "[::1]"].includes(new URL("http://" + request.headers.host).hostname); } catch {}
+      if (!localDisc || !localHost || !["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(peer) ||
+          (request.headers.origin && request.headers.origin !== "http://" + request.headers.host)) {
+        response.writeHead(404).end("Not found"); return;
+      }
+      try {
+        const file = await stat(localDisc);
+        response.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Length": file.size,
+          "Cache-Control": "private, no-store", "Cross-Origin-Resource-Policy": "same-origin" });
+        if (request.method === "HEAD") response.end();
+        else {
+          const stream = createReadStream(localDisc);
+          response.once("close", () => stream.destroy());
+          stream.on("error", () => response.destroy()).pipe(response);
+        }
+      } catch { response.writeHead(404).end("Local disc unavailable"); }
+      return;
+    }
     if (pathname === "/health") {
-      response.writeHead(200, { "Content-Type": "application/json" }).end('{"ok":true}'); return;
+      response.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" })
+        .end(JSON.stringify({ ok: true, onlineV2: !!prototype })); return;
     }
     const entry = publicFiles.get(pathname);
     if (!entry) { response.writeHead(404).end("Not found"); return; }
@@ -41,6 +69,7 @@ export function createLobbyServer({
     }
   });
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 65536, perMessageDeflate: false });
+  const prototype = onlineV2 ? createOnlineV2Coordinator(onlineV2 === true ? {} : onlineV2) : null;
   const send = (client, data) => {
     if (client.socket.readyState === WebSocket.OPEN) client.socket.send(JSON.stringify(data));
   };
@@ -68,7 +97,11 @@ export function createLobbyServer({
     const origin = request.headers.origin;
     let allowed = !origin;
     try { allowed ||= origin === publicOrigin || new URL(origin).host === request.headers.host; } catch {}
-    if (new URL(request.url, "http://localhost").pathname !== "/lobby" || !allowed || clients.size >= maxClients) {
+    const pathname = new URL(request.url, "http://localhost").pathname;
+    if (pathname === "/online-v2" && allowed && prototype) {
+      prototype.handleUpgrade(request, socket, head); return;
+    }
+    if (pathname !== "/lobby" || !allowed || clients.size >= maxClients) {
       socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n"); return;
     }
     sockets.handleUpgrade(request, socket, head, ws => sockets.emit("connection", ws));
@@ -144,13 +177,15 @@ export function createLobbyServer({
     }
   }, 15000);
   heartbeat.unref();
-  server.on("close", () => { clearInterval(heartbeat); sockets.close(); });
+  server.on("close", () => { clearInterval(heartbeat); sockets.close(); void prototype?.close(); });
   return {
     server,
+    prototype,
     close: () => new Promise(resolveClose => {
       clearInterval(heartbeat);
       for (const client of clients.values()) client.socket.terminate();
-      server.close(resolveClose);
+      const stopped = prototype?.close();
+      server.close(() => Promise.resolve(stopped).then(resolveClose));
       server.closeAllConnections();
     }),
   };
@@ -161,7 +196,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   try { iceServers = process.env.CTR_ICE_SERVERS ? JSON.parse(process.env.CTR_ICE_SERVERS) : undefined; }
   catch { console.error("CTR_ICE_SERVERS must contain a JSON array of RTCIceServer entries."); process.exit(1); }
   if (iceServers !== undefined && !Array.isArray(iceServers)) { console.error("CTR_ICE_SERVERS must be an array."); process.exit(1); }
-  const { server } = createLobbyServer({ iceServers, publicOrigin: process.env.PUBLIC_ORIGIN });
+  const { server } = createLobbyServer({ iceServers, publicOrigin: process.env.PUBLIC_ORIGIN,
+    onlineV2: process.env.CTR_ONLINE_V2 === "1" || process.argv.includes("--online-v2") });
   const port = Number(process.env.PORT || 8080);
   const host = process.env.HOST || "127.0.0.1";
   server.on("error", error => {

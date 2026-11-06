@@ -1,4 +1,7 @@
 #include <common.h>
+#ifdef CTR_NATIVE
+#include <platform/native_online.h>
+#endif
 
 u32 UI_VsQuipReadDriver(struct Driver *d, int offset, int size)
 {
@@ -430,6 +433,9 @@ void UI_VsQuipDrawAll(void)
 	struct GameTracker *gGT = GAME_TRACKER;
 	struct Thread *thread;
 	struct PushBuffer *pushBuffer;
+#ifdef CTR_NATIVE
+	u32 *savedUiOT = gGT->pushBuffer_UI.ptrOT;
+#endif
 
 	// loop through player threads
 	int playerIndex = 0;
@@ -452,6 +458,9 @@ void UI_VsQuipDrawAll(void)
 
 		// get player struct from thread
 		d = (struct Driver *)thread->object;
+#ifdef CTR_NATIVE
+		if (NativeOnline_IsActive()) gGT->pushBuffer_UI.ptrOT = gGT->pushBuffer[d->driverID].ptrOT;
+#endif
 
 		// NOTE(aalhendi): Snapshot the metadata and resident press array here.
 		characterMetadata = GAME_CHARACTER_METADATA;
@@ -479,4 +488,7 @@ void UI_VsQuipDrawAll(void)
 			}
 		}
 	}
+#ifdef CTR_NATIVE
+	gGT->pushBuffer_UI.ptrOT = savedUiOT;
+#endif
 }

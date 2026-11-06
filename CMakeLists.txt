@@ -3,6 +3,11 @@ project(CTR-Native C)
 include(CheckCCompilerFlag)
 
 set(CTR_NATIVE_VERSION "0.1.0-beta.7.1")
+option(CTR_HEADLESS "Build the isolated Online 2.0 simulation worker (Emscripten)" OFF)
+option(CTR_ONLINE_PROBES "Compile private Online 2.0 power-up test fixtures" OFF)
+if(CTR_HEADLESS AND NOT EMSCRIPTEN)
+    message(FATAL_ERROR "CTR_HEADLESS requires Emscripten; use the online-v2-release preset")
+endif()
 
 if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
     message(FATAL_ERROR
@@ -76,7 +81,12 @@ set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
 set(SDL_TRAY OFF CACHE BOOL "" FORCE)
 set(SDL_POWER OFF CACHE BOOL "" FORCE)
 set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
-set(SDL_OPENGLES ${EMSCRIPTEN} CACHE BOOL "" FORCE)
+if(CTR_HEADLESS)
+    set(SDL_OPENGL OFF CACHE BOOL "" FORCE)
+    set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
+else()
+    set(SDL_OPENGLES ${EMSCRIPTEN} CACHE BOOL "" FORCE)
+endif()
 set(SDL_OFFSCREEN OFF CACHE BOOL "" FORCE)
 set(SDL_SNDIO OFF CACHE BOOL "" FORCE)
 set(SDL_SNDIO_SHARED OFF CACHE BOOL "" FORCE)
@@ -97,6 +107,8 @@ set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT ctr_native)
 target_include_directories(ctr_native PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_compile_definitions(ctr_native PRIVATE
     CTR_NATIVE
+    $<$<BOOL:${CTR_HEADLESS}>:CTR_HEADLESS>
+    $<$<BOOL:${CTR_ONLINE_PROBES}>:CTR_ONLINE_PROBES>
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:CTR_INTERNAL>
     CTR_NATIVE_VERSION=\"${CTR_NATIVE_VERSION}\"
     CTR_NATIVE_BUILD_ID=\"${CTR_NATIVE_BUILD_ID}\"
@@ -140,7 +152,30 @@ if(MINGW)
 endif()
 
 if(EMSCRIPTEN)
-    include(cmake/Web.cmake)
+    # Both targets must identify the same simulation sources, even in dirty
+    # checkouts where the Git build ID alone cannot distinguish two builds.
+    file(GLOB_RECURSE CTR_ONLINE_IDENTITY_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_SOURCE_DIR}/game/*.c" "${CMAKE_SOURCE_DIR}/game/*.h"
+        "${CMAKE_SOURCE_DIR}/include/*.h" "${CMAKE_SOURCE_DIR}/platform/*.c"
+    )
+    list(APPEND CTR_ONLINE_IDENTITY_SOURCES
+        "${CMAKE_SOURCE_DIR}/CMakeLists.txt"
+        "${CMAKE_SOURCE_DIR}/cmake/Web.cmake"
+        "${CMAKE_SOURCE_DIR}/cmake/OnlineV2.cmake"
+    )
+    set(CTR_ONLINE_IDENTITY_INPUT "${CTR_NATIVE_VERSION}")
+    foreach(online_source IN LISTS CTR_ONLINE_IDENTITY_SOURCES)
+        file(SHA256 "${online_source}" online_source_hash)
+        string(APPEND CTR_ONLINE_IDENTITY_INPUT "${online_source_hash}")
+    endforeach()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CTR_ONLINE_IDENTITY_SOURCES})
+    string(SHA256 CTR_ONLINE_SOURCE_ID "${CTR_ONLINE_IDENTITY_INPUT}")
+    target_compile_definitions(ctr_native PRIVATE CTR_ONLINE_SOURCE_ID=\"${CTR_ONLINE_SOURCE_ID}\")
+    if(CTR_HEADLESS)
+        include(cmake/OnlineV2.cmake)
+    else()
+        include(cmake/Web.cmake)
+    endif()
 endif()
 
 include(CTest)

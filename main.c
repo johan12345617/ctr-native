@@ -24,6 +24,7 @@
 #include "platform/native_perf.h"
 #include "platform/native_replay_scheduler.h"
 #include "platform/native_savestate.h"
+#include "platform/native_online.h"
 
 #include <platform.h>
 
@@ -45,7 +46,7 @@
 #include "platform/native_gpu_links.c"
 #include "platform/native_gpu.c"
 #include "platform/native_gte_core.c"
-#if !defined(__EMSCRIPTEN__)
+#if !defined(__EMSCRIPTEN__) && !defined(CTR_HEADLESS)
 #include "platform/native_glad.c"
 #endif
 #include "platform/native_input.c"
@@ -62,10 +63,15 @@
 #include "platform/native_perf.c"
 #include "platform/native_platform.c"
 #include "platform/native_replay_scheduler.c"
+#if defined(CTR_HEADLESS)
+#include "platform/native_renderer_headless.c"
+#else
 #include "platform/native_renderer.c"
+#endif
 #include "platform/native_savestate.c"
 #include "platform/native_state.c"
 #include "platform/native_str.c"
+#include "platform/native_online.c"
 #if defined(__EMSCRIPTEN__)
 #include "platform/native_web.c"
 #endif
@@ -220,6 +226,12 @@ int main(int argc, char *argv[])
 	(void)argv;
 #endif
 
+	// The prototype owns the scheduler and calls CTR_RunIteration explicitly.
+	if (NativeOnline_IsScheduled())
+	{
+		NativeAudio_SetDeterministicRenderMode(1);
+		return 0;
+	}
 	const int result = CTR_Main();
 
 	Platform_Shutdown();

@@ -1,4 +1,5 @@
 #include <common.h>
+#include "UI_OnlineHud.h"
 
 enum
 {
@@ -60,7 +61,7 @@ void UI_DrawLapCount(s16 posX, s32 posY, s32 unusedScale, struct Driver *d)
 	}
 
 	// 1P or 2P
-	if ((u32)gGT->numPlyrCurrGame < UI_LAP_COUNT_SPLIT_PLAYER_COUNT)
+	if ((u32)UI_PRESENTATION_PLAYERS(gGT->numPlyrCurrGame) < UI_LAP_COUNT_SPLIT_PLAYER_COUNT)
 	{
 		s32 flags = JUSTIFY_RIGHT | PERIWINKLE;
 		DecalFont_DrawLine(GAME_LANGUAGE_STRINGS[LNG_LAP], posX, posY, FONT_SMALL, flags);

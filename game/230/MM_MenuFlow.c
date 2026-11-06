@@ -1,4 +1,7 @@
 #include <common.h>
+#ifdef CTR_NATIVE
+#include <platform/native_online.h>
+#endif
 
 s32 MM_TransitionInOut(struct TransitionMeta *meta, s32 framesPassed, s32 numFrames)
 {
@@ -63,6 +66,9 @@ void MM_MenuProc_Main(struct RectMenu *menu)
 	{
 		MM_MENU_MAIN.rows = MM_ROWS_MAIN_WITH_SCRAPBOOK;
 	}
+#ifdef CTR_NATIVE
+	if (NativeOnline_MenuMain(menu)) return;
+#endif
 
 	MM_ParseCheatCodes();
 	MM_ToggleRows_Difficulty();
@@ -83,7 +89,11 @@ void MM_MenuProc_Main(struct RectMenu *menu)
 
 		if ((MM_MENU_MAIN.state & DRAW_NEXT_MENU_IN_HIERARCHY) == 0)
 		{
-			GAME_TRACKER->numPlyrNextGame = 1;
+			GAME_TRACKER->numPlyrNextGame =
+#ifdef CTR_NATIVE
+			    NativeOnline_IsMenuFlow() ? 2 :
+#endif
+			    1;
 
 			// if button pressed, reset timer
 			if (GAMEPADS->anyoneHeldCurr != 0)

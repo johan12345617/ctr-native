@@ -1226,6 +1226,17 @@ static struct ModelHeader *RenderBucket_SelectModelHeader(struct Instance *inst,
 	}
 
 	*lodExhaustedOut = 1;
+#ifdef CTR_NATIVE
+	// Online humans keep the cheapest mesh after retail's final distance LOD.
+	// Frustum/depth clipping and deliberate invisibility/flicker still apply.
+	if (NativeOnline_IsActive() && viewDepth > 0 && inst->thread &&
+	    (inst->thread->flags & 0xff) == PLAYER && inst->thread->inst == inst)
+	{
+		*lodIndexOut = inst->model->numHeaders - 1;
+		*lodExhaustedOut = 0;
+		return &inst->model->headers[*lodIndexOut];
+	}
+#endif
 	return 0;
 }
 
@@ -2025,6 +2036,19 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 		queueState->lastPushBuffer = pb;
 		queueState->otBase = pb->ptrOT;
 	}
+
+#ifdef CTR_NATIVE
+	if (NativeOnline_IsActive())
+	{
+		// Position numbers use the shared UI projection, but belong to one
+		// driver's camera OT. Reset the cache base for the next UI instance.
+		queueState->otBase = pb->ptrOT;
+		for (int owner = 0; owner < sdata->gGT->numPlyrCurrGame; owner++)
+			if (sdata->gGT->drivers[owner] && (sdata->gGT->drivers[owner]->instBigNum == inst ||
+			    sdata->gGT->drivers[owner]->instFruitDisp == inst))
+				queueState->otBase = sdata->gGT->pushBuffer[owner].ptrOT;
+	}
+#endif
 
 	RenderBucket_ApplyOwnerPushBufferGate(inst, playerIndex, &queuedFlags);
 	RenderBucket_GetViewPosition(inst, pb, &viewPos);

@@ -14,6 +14,7 @@
 #include "platform/native_log.h"
 #include "platform/native_perf.h"
 #include "platform/native_renderer.h"
+#include "platform/native_online.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -88,6 +89,7 @@ typedef struct
 	u16 numVerts;
 
 	const char *debugText;
+	int onlineCamera;
 } GPUDrawSplit;
 
 #define MAX_DRAW_SPLITS 4096
@@ -107,9 +109,13 @@ typedef struct
 	GPUDrawSplit splits[MAX_DRAW_SPLITS];
 	int vertexIndex;
 	int splitIndex;
+	int onlineCamera;
 } NativeGpuState;
 
 global_variable NativeGpuState s_gpu;
+static int s_onlineViewMask;
+void NativeGpu_BeginOnlineFrame(void) { s_onlineViewMask = 0; }
+int NativeGpu_OnlineViewMask(void) { return s_onlineViewMask; }
 
 struct NativeGpuSnapshot
 {
@@ -123,6 +129,38 @@ struct NativeGpuSnapshot
 	u16 vram[VRAM_WIDTH * VRAM_HEIGHT];
 };
 
+// Race rollback retains draw-command state, not the framebuffer. Gameplay does
+// not read pixels; the final replayed frame redraws the current world. Ordinary
+// save states retain the complete VRAM representation above.
+struct NativeGpuRollbackState
+{
+	u32 magic;
+	DRAWENV drawEnv;
+	DISPENV dispEnv;
+	s32 disabled, maskSet;
+};
+int NativeGpu_GetRollbackStateSize(void) { return sizeof(struct NativeGpuRollbackState); }
+int NativeGpu_CaptureRollbackState(void *dst, int size)
+{
+	if (!dst || size != sizeof(struct NativeGpuRollbackState)) return 0;
+	struct NativeGpuRollbackState *state = dst;
+	memset(state, 0, sizeof(*state));
+	state->magic = 0x3152474eu;
+	state->drawEnv = activeDrawEnv; state->dispEnv = activeDispEnv;
+	state->disabled = g_GPUDisabledState; state->maskSet = s_gpu.psxDrawMaskSet;
+	return 1;
+}
+int NativeGpu_RestoreRollbackState(const void *src, int size)
+{
+	if (!src || size != sizeof(struct NativeGpuRollbackState)) return 0;
+	const struct NativeGpuRollbackState *state = src;
+	if (state->magic != 0x3152474eu || state->disabled < 0 || state->disabled > 1 || state->maskSet < 0 || state->maskSet > 1) return 0;
+	activeDrawEnv = state->drawEnv; activeDispEnv = state->dispEnv;
+	g_GPUDisabledState = state->disabled; s_gpu.psxDrawMaskSet = state->maskSet;
+	ClearSplits();
+	return 1;
+}
+
 int NativeGpu_HasPendingSplits(void)
 {
 	return s_gpu.splitIndex > 0;
@@ -133,6 +171,8 @@ void ClearSplits(void)
 	s_gpu.currentSplitDebugText = NULL;
 	s_gpu.vertexIndex = 0;
 	s_gpu.splitIndex = 0;
+	// A batch flush can occur inside a camera's OT chain (FILL, MoveImage or
+	// framebuffer feedback). Its remaining packets still belong to that camera.
 	s_gpu.splits[0].texFormat = (TexFormat)0xFFFF;
 	s_gpu.splits[0].psxTexturedSemiTrans = false;
 	s_gpu.splits[0].psxTextureOutputSTP = false;
@@ -834,7 +874,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	    curSplit->psxTextureOutputSTP == psxTextureOutputSTP && curSplit->psxDrawMaskSet == s_gpu.psxDrawMaskSet &&
 	    curSplit->drawenv.clip.x == activeDrawEnv.clip.x && curSplit->drawenv.clip.y == activeDrawEnv.clip.y &&
 	    curSplit->drawenv.clip.w == activeDrawEnv.clip.w && curSplit->drawenv.clip.h == activeDrawEnv.clip.h && curSplit->drawenv.dfe == activeDrawEnv.dfe &&
-	    curSplit->debugText == s_gpu.currentSplitDebugText)
+	    curSplit->debugText == s_gpu.currentSplitDebugText && curSplit->onlineCamera == s_gpu.onlineCamera)
 	{
 		return;
 	}
@@ -858,6 +898,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	split->drawenv = activeDrawEnv;
 	split->dispenv = activeDispEnv;
 	split->debugText = s_gpu.currentSplitDebugText;
+	split->onlineCamera = s_gpu.onlineCamera;
 
 	split->drawenv.tw.w = s_gpu.overrideTextureWidth;
 	split->drawenv.tw.h = s_gpu.overrideTextureHeight;
@@ -866,8 +907,16 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	split->numVerts = 0;
 }
 
+internal bool NativeGpu_ShouldDrawCamera(int camera, bool onScreen)
+{
+	const int localPlayer = NativeOnline_LocalPlayer();
+	return localPlayer < 0 || !onScreen || camera < 0 || camera == localPlayer;
+}
+
 void DrawSplit(const GPUDrawSplit *split)
 {
+	if (!NativeGpu_ShouldDrawCamera(split->onlineCamera, split->drawenv.dfe)) return;
+	if (split->drawenv.dfe && split->onlineCamera >= 0 && split->numVerts) s_onlineViewMask |= 1 << split->onlineCamera;
 	if (split->debugText)
 	{
 		NativeRenderer_PushDebugLabel(split->debugText);
@@ -943,6 +992,7 @@ internal void SetPSXMaskState(u32 code)
 //
 void DrawAllSplits()
 {
+	if (!NativeOnline_ShouldPresent()) { ClearSplits(); return; }
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_DRAW_ALL_SPLITS);
 	// CPU-originated LoadImage, MoveImage, and fill commands are GPU-visible
 	// before the next draw batch, matching PS1 command ordering.
@@ -1093,6 +1143,8 @@ void ParsePrimitivesLinkedList(u32 *p, int singlePrimitive)
 #endif
 
 	// setup single primitive flag (needed for AddSplits)
+	// Ownership starts at each submitted list, not at each vertex-batch flush.
+	s_gpu.onlineCamera = -1;
 	s_gpu.drawPrimMode = singlePrimitive;
 
 	if (singlePrimitive)
@@ -1109,6 +1161,20 @@ void ParsePrimitivesLinkedList(u32 *p, int singlePrimitive)
 		u8 *basePacket = (u8 *)p;
 		while (true)
 		{
+			// Main OTs have six shared UI words followed by 1024 words per
+			// camera, in reverse player order. Per-instance OT chains inherit
+			// their parent's owner until traversal returns to a main OT node.
+			if (NativeOnline_IsActive())
+			{
+				struct GameTracker *gt = sdata->gGT;
+				uintptr_t ot = (uintptr_t)gt->otSwapchainDB[gt->swapchainIndex];
+				uintptr_t packet = (uintptr_t)basePacket;
+				if (packet >= ot && packet < ot + 24 + gt->numPlyrCurrGame * 4096)
+				{
+					uintptr_t offset = packet - ot;
+					s_gpu.onlineCamera = offset < 24 ? -1 : gt->numPlyrCurrGame - 1 - (int)((offset - 24) / 4096);
+				}
+			}
 			const int tagLength = getlen(basePacket);
 			if (tagLength > 0)
 			{
@@ -1880,11 +1946,17 @@ int ParsePrimitive(P_TAG *polyTag)
 			rect.w = fill->w;
 			rect.h = fill->h;
 
-			if (NativeGpu_HasPendingSplits())
+			// CAM_ClearScreen queues immediate FILLs per camera. With full-size
+			// online views, another camera's clear would erase our already-drawn
+			// world even though its ordinary geometry is filtered by DrawSplit.
+			if (NativeGpu_ShouldDrawCamera(s_gpu.onlineCamera, activeDrawEnv.dfe))
 			{
-				DrawAllSplits();
+				if (NativeGpu_HasPendingSplits())
+				{
+					DrawAllSplits();
+				}
+				ClearImage(&rect, fill->r0, fill->g0, fill->b0);
 			}
-			ClearImage(&rect, fill->r0, fill->g0, fill->b0);
 			primLength = 3;
 		}
 		break;

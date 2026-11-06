@@ -68,13 +68,29 @@ sudo apt install libx11-dev libxext-dev libgl1-mesa-dev libasound2-dev libudev-d
 The WebAssembly/WebGL2 target runs the same game in a browser, including
 local split-screen. Build with `build-web.ps1` on Windows or `bash build-web.sh`
 on Linux/macOS, then run `npm --prefix web start`. Select your own NTSC-U
-`.bin` disc in the launcher; it stays local and is never uploaded.
+`.bin` disc in the launcher. On this computer, the Node server automatically
+loads `assets/ctr-u.bin`; remote devices select their own disc. Disc bytes are
+not sent through the online protocol.
 
 See [the web build guide](docs/WEB.md) for prerequisites, controls, persistent
-saves, hosting, and online lobbies. Choose **Online → Create Lobby** or
+saves, hosting, and online lobbies. Choose **Shared screen → Create Lobby** or
 **Join Lobby**: one host streams the screen and game audio while guests send
 controller inputs. Guests do not need a disc. All playable characters are
 unlocked by default in native and web builds.
+Xbox / XInput, DualShock 4 and DualSense controllers map automatically in local
+and online play. Connect by USB or pair over Bluetooth, then press a button.
+The browser supports hot-plugging and automatically uses your active controller;
+no mapping screen is required. See [controller details](docs/GAMEPAD_CHANGES.md).
+
+For two-player online play with individual cameras, run
+`npm --prefix web run start:online-v2`, start the game and choose **Online** in
+the engine's main menu. Create a lobby, share the displayed code, or join with a
+code using the keyboard/controller. Once both players are ready, the host starts
+the session and selects **Race**, **Cup** or **Battle**. The original character,
+track/cup, battle settings and results screens handle setup and continuation.
+Driving uses local prediction; menus and loading transitions use confirmed
+controls. Further player counts, full mode coverage and live validation remain
+development work. See [the guide and measured limits](docs/ONLINE_V2.md).
 
 ### Native desktop builds
 

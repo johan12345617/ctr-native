@@ -27,6 +27,12 @@ void PushBuffer_Init(struct PushBuffer *pb, int id, int total)
 	pb->matrix_Proj.t[1] = 0;
 	pb->matrix_Proj.t[2] = 0;
 
+#ifdef CTR_NATIVE
+	// Every online camera uses the same full-size projection on every runtime.
+	// The native GPU selects the local view; player counts still govern gameplay.
+	if (NativeOnline_IsActive()) total = 1;
+#endif
+
 	switch (total)
 	{
 	case 1:

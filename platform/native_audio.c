@@ -3,6 +3,7 @@
 #include <platform/native_assets.h>
 #include <platform/native_disc_image.h>
 #include <platform/native_perf.h>
+#include <platform/native_online.h>
 
 #include <SDL3/SDL.h>
 #include <limits.h>
@@ -2233,6 +2234,8 @@ internal void NativeAudio_AddOverflowFramesNoLock(int frameCount)
 
 internal int NativeAudio_QueueRenderedFramesNoLock(const s16 *frames, int frameCount)
 {
+	// Resimulation still advances SPU/XA, but must not replay its PCM output.
+	if (!NativeOnline_ShouldPresent()) return frameCount;
 	const int frameSamples = NATIVE_AUDIO_CHANNELS;
 	int framesQueued = 0;
 
@@ -2476,14 +2479,17 @@ internal int NativeAudio_ShouldReportOutputStatsNoLock(int *underrunFrames, int 
 
 int NativeAudio_GetStateSize(void)
 {
-	return (int)sizeof(struct NativeAudioSnapshot);
+	// Local rollback also retains the small XA decoder ring. Compressed music
+	// stays resident; restoring it must not reopen and decode the whole track.
+	return (int)sizeof(struct NativeAudioSnapshot) +
+	       (NativeOnline_IsRollbackCapture() ? (int)sizeof(struct NativeAudioXaStream) : 0);
 }
 
 int NativeAudio_CaptureState(void *dst, int dstSize)
 {
 	struct NativeAudioSnapshot *snapshot = (struct NativeAudioSnapshot *)dst;
 
-	if ((dst == NULL) || (dstSize < (int)sizeof(*snapshot)))
+	if ((dst == NULL) || (dstSize < NativeAudio_GetStateSize()))
 	{
 		return 0;
 	}
@@ -2514,6 +2520,8 @@ int NativeAudio_CaptureState(void *dst, int dstSize)
 	}
 	NativeAudio_CopyXAToState(&snapshot->xa, &s_audio.xa);
 	memcpy(snapshot->spuSampleMem, s_audio.spu.memory, sizeof(snapshot->spuSampleMem));
+	if (NativeOnline_IsRollbackCapture())
+		memcpy((u8 *)dst + sizeof(*snapshot), &s_audio.xaStream, sizeof(s_audio.xaStream));
 
 	NativeAudio_UnlockOutput();
 
@@ -2528,6 +2536,8 @@ int NativeAudio_RestoreState(const void *src, int srcSize)
 	struct NativeAudioXaTrackInfo xaInfo;
 	char xaPath[128];
 	int i;
+	struct NativeAudioXaStream rollbackStream;
+	int reuseXA = 0;
 
 	memset(&xaSource, 0, sizeof(xaSource));
 	memset(&xaPrepared, 0, sizeof(xaPrepared));
@@ -2569,8 +2579,19 @@ int NativeAudio_RestoreState(const void *src, int srcSize)
 	{
 		return 0;
 	}
+	if (NativeOnline_IsRollbackCapture() && srcSize == NativeAudio_GetStateSize())
+	{
+		memcpy(&rollbackStream, (const u8 *)src + sizeof(*snapshot), sizeof(rollbackStream));
+		NativeAudio_LockOutput();
+		reuseXA = rollbackStream.sectors && rollbackStream.sectors == s_audio.xaStream.sectors &&
+		          snapshot->xa.hasTrackIdentity && s_audio.xa.hasTrackIdentity &&
+		          snapshot->xa.categoryID == s_audio.xa.categoryID && snapshot->xa.xaID == s_audio.xa.xaID &&
+		          rollbackStream.sectorCount == s_audio.xaStream.sectorCount &&
+		          rollbackStream.sectorSize == s_audio.xaStream.sectorSize;
+		NativeAudio_UnlockOutput();
+	}
 
-	if (snapshot->xa.active && snapshot->xa.hasTrackIdentity)
+	if (!reuseXA && snapshot->xa.active && snapshot->xa.hasTrackIdentity)
 	{
 		if (!NativeAudio_LookupXATrackInfo(snapshot->xa.categoryID, snapshot->xa.xaID, &xaInfo) ||
 		    !NativeAudio_BuildXAPath(xaPath, sizeof(xaPath), snapshot->xa.categoryID, xaInfo.fileNumber) || !NativeAudio_XaSourceOpen(xaPath, &xaSource))
@@ -2587,7 +2608,7 @@ int NativeAudio_RestoreState(const void *src, int srcSize)
 
 	NativeAudio_LockOutput();
 
-	NativeAudio_CloseXANoLock();
+	if (!reuseXA) NativeAudio_CloseXANoLock();
 
 	s_audio.init = restoreInit;
 	s_audio.muted = snapshot->muted;
@@ -2609,7 +2630,22 @@ int NativeAudio_RestoreState(const void *src, int srcSize)
 		NativeAudio_CopyStateToVoice(&s_audio.voices[i], &snapshot->voices[i]);
 	}
 
-	if (snapshot->xa.active && snapshot->xa.hasTrackIdentity)
+	if (reuseXA)
+	{
+		s_audio.xaStream = rollbackStream;
+		s_audio.xa.frameCount = snapshot->xa.frameCount;
+		s_audio.xa.sampleRate = snapshot->xa.sampleRate;
+		s_audio.xa.categoryID = snapshot->xa.categoryID;
+		s_audio.xa.xaID = snapshot->xa.xaID;
+		s_audio.xa.hasTrackIdentity = snapshot->xa.hasTrackIdentity;
+		s_audio.xa.active = snapshot->xa.active;
+		s_audio.xa.positionFp = snapshot->xa.positionFp;
+		s_audio.xa.outputFrame = snapshot->xa.outputFrame;
+		s_audio.xa.stepFp = snapshot->xa.stepFp;
+		s_audio.xa.volumeLeft = snapshot->xa.volumeLeft;
+		s_audio.xa.volumeRight = snapshot->xa.volumeRight;
+	}
+	else if (snapshot->xa.active && snapshot->xa.hasTrackIdentity)
 	{
 		NativeAudio_XaStreamStartNoLock(&xaPrepared);
 		s_audio.xa.frameCount = xaPrepared.frameCount;
@@ -2830,6 +2866,10 @@ void NativeAudio_StepVBlank(void)
 
 internal int NativeAudio_OpenDevice(void)
 {
+#if defined(CTR_HEADLESS)
+	// SPU/XA still advance on deterministic VBlanks; no output device or callback.
+	return 1;
+#endif
 	SDL_AudioSpec want;
 	SDL_AudioSpec srcSpec;
 	SDL_AudioSpec dstSpec;

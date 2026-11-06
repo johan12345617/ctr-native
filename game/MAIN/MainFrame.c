@@ -1,4 +1,7 @@
 #include <common.h>
+#if defined(CTR_NATIVE)
+#include <platform/native_online.h>
+#endif
 
 #if defined(CTR_NATIVE)
 static void MainFrame_RegisterGpuLinkRanges(struct GameTracker *gGT)
@@ -206,6 +209,9 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 		// cutscene/gameplay advancement. Use the recorded PS1-shaped frame delta
 		// before msInThisLEV and elapsedEventTime consume it.
 		NativeReplayScheduler_ConsumeFrameElapsedTimeMS(&gGT->elapsedTimeMS);
+#endif
+#if defined(CTR_NATIVE)
+		if (NativeOnline_IsActive()) gGT->elapsedTimeMS = 0x20;
 #endif
 		gGT->msInThisLEV += gGT->elapsedTimeMS;
 		if (gGT->trafficLightsTimer < 1)

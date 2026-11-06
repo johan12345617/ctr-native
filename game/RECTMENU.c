@@ -1,4 +1,16 @@
 #include <common.h>
+#if defined(CTR_NATIVE)
+#include <platform/native_online.h>
+#endif
+
+static char *RectMenu_String(int index)
+{
+#ifdef CTR_NATIVE
+	const char *online = NativeOnline_MenuString(index);
+	if (online) return (char *)online;
+#endif
+	return GAME_LANGUAGE_STRINGS[index];
+}
 
 #ifndef RECTMENU_TIME_BUFFER
 #define RECTMENU_TIME_BUFFER      sdata->ghostStrTrackTime
@@ -367,7 +379,7 @@ void RECTMENU_GetWidth(struct RectMenu *m, s16 *width, b16 boolCheckSubmenu)
 	for (row = m->rows; row->stringIndex != -1; row++)
 	{
 		// width of string in each row
-		lineWidth = DecalFont_GetLineWidth(GAME_LANGUAGE_STRINGS[row->stringIndex & 0x7fff], fontType) + 1;
+		lineWidth = DecalFont_GetLineWidth(RectMenu_String(row->stringIndex & 0x7fff), fontType) + 1;
 
 		// set new width if new max is found
 		if (*width < (lineWidth))
@@ -379,7 +391,7 @@ void RECTMENU_GetWidth(struct RectMenu *m, s16 *width, b16 boolCheckSubmenu)
 	// handle menu title
 	if (m->stringIndexTitle >= 0)
 	{
-		lineWidth = DecalFont_GetLineWidth(GAME_LANGUAGE_STRINGS[m->stringIndexTitle], (m->state & BIG_TEXT_IN_TITLE) ? FONT_BIG : fontType) + 1;
+		lineWidth = DecalFont_GetLineWidth(RectMenu_String(m->stringIndexTitle), (m->state & BIG_TEXT_IN_TITLE) ? FONT_BIG : fontType) + 1;
 
 		// set new width if new max is found
 		if (*width < (lineWidth))
@@ -475,11 +487,11 @@ void RECTMENU_DrawSelf(struct RectMenu *menu, s16 posX, s16 posY, s16 menuWidth)
 		s16 titleFont = (menu->state & BIG_TEXT_IN_TITLE) ? FONT_BIG : fontType;
 		if (menu->state & CENTER_MENU_TEXT)
 		{
-			DecalFont_DrawLine(GAME_LANGUAGE_STRINGS[menu->stringIndexTitle], posX + menu->posX_prev + menuWidth / 2, rowY, titleFont, baseFlags | 0x8000);
+			DecalFont_DrawLine(RectMenu_String(menu->stringIndexTitle), posX + menu->posX_prev + menuWidth / 2, rowY, titleFont, baseFlags | 0x8000);
 		}
 		else
 		{
-			DecalFont_DrawLine(GAME_LANGUAGE_STRINGS[menu->stringIndexTitle], posX + menu->posX_prev, rowY, titleFont,
+			DecalFont_DrawLine(RectMenu_String(menu->stringIndexTitle), posX + menu->posX_prev, rowY, titleFont,
 			                   (menu->state & CENTER_ON_X) ? baseFlags | 0x8000 : baseFlags);
 		}
 		rowY = titleHeight + (s16)(rowY + 6);
@@ -499,12 +511,12 @@ void RECTMENU_DrawSelf(struct RectMenu *menu, s16 posX, s16 posY, s16 menuWidth)
 				{
 					if (menu->state & CENTER_MENU_TEXT)
 					{
-						DecalFont_DrawLine(GAME_LANGUAGE_STRINGS[textIndex], posX + menu->posX_prev + centeredRowOffset, rowY, fontType,
+						DecalFont_DrawLine(RectMenu_String(textIndex), posX + menu->posX_prev + centeredRowOffset, rowY, fontType,
 						                   ~(~textFlags & 0x7fff));
 					}
 					else
 					{
-						DecalFont_DrawLine(GAME_LANGUAGE_STRINGS[textIndex], posX + menu->posX_prev + 1, rowY, fontType,
+						DecalFont_DrawLine(RectMenu_String(textIndex), posX + menu->posX_prev + 1, rowY, fontType,
 						                   (menu->state & CENTER_ON_X) ? ~(~textFlags & 0x7fff) : textFlags);
 					}
 				}

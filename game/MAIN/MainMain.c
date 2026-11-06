@@ -1,4 +1,7 @@
 #include <common.h>
+#if defined(CTR_NATIVE)
+#include <platform/native_online.h>
+#endif
 
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
 #include <platform/native_perf.h>
@@ -52,7 +55,7 @@ static struct NativeReplaySchedulerFrameInfo MainReplayScheduler_FrameInfo(struc
 #endif
 
 #ifdef CTR_NATIVE
-u32 CTR_Main(void)
+u32 CTR_RunIteration(void)
 #else
 u32 main(void)
 #endif
@@ -483,8 +486,25 @@ u32 main(void)
 			sdata->mainGameState = 0;
 #endif
 		}
-	} while (true);
+	} while (
+#ifdef CTR_NATIVE
+	    false
+#else
+	    true
+#endif
+	);
+#ifdef CTR_NATIVE
+	return 1;
+#endif
 }
+
+#ifdef CTR_NATIVE
+u32 CTR_Main(void)
+{
+	while (CTR_RunIteration()) {}
+	return 0;
+}
+#endif
 
 // NOTE(aalhendi): Source split of retail main's state-0 body
 // 0x8003c614-0x8003c984.

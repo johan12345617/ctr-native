@@ -22,5 +22,10 @@ void ParsePrimitivesLinkedList(u32 *p, int singlePrimitive);
 int NativeGpu_GetStateSize(void);
 int NativeGpu_CaptureState(void *dst, int dstSize);
 int NativeGpu_RestoreState(const void *src, int srcSize);
+int NativeGpu_GetRollbackStateSize(void);
+int NativeGpu_CaptureRollbackState(void *dst, int dstSize);
+int NativeGpu_RestoreRollbackState(const void *src, int srcSize);
+void NativeGpu_BeginOnlineFrame(void);
+int NativeGpu_OnlineViewMask(void);
 
 #endif

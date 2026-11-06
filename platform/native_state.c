@@ -5,6 +5,7 @@
 #include "platform/native_audio.h"
 #include "platform/native_gpu.h"
 #include "platform/native_input.h"
+#include "platform/native_online.h"
 
 #include <string.h>
 
@@ -52,7 +53,7 @@ internal int NativeState_GetRegionSize(u32 kind)
 	case NATIVE_STATE_REGION_AUDIO:
 		return NativeAudio_GetStateSize();
 	case NATIVE_STATE_REGION_GPU:
-		return NativeGpu_GetStateSize();
+		return NativeOnline_IsRollbackCapture() ? NativeGpu_GetRollbackStateSize() : NativeGpu_GetStateSize();
 	}
 
 	return 0;
@@ -67,7 +68,7 @@ internal int NativeState_CaptureRegion(u32 kind, void *dst, int dstSize)
 	case NATIVE_STATE_REGION_AUDIO:
 		return NativeAudio_CaptureState(dst, dstSize);
 	case NATIVE_STATE_REGION_GPU:
-		return NativeGpu_CaptureState(dst, dstSize);
+		return NativeOnline_IsRollbackCapture() ? NativeGpu_CaptureRollbackState(dst, dstSize) : NativeGpu_CaptureState(dst, dstSize);
 	}
 
 	return 0;
@@ -82,7 +83,7 @@ internal int NativeState_RestoreRegion(u32 kind, const void *src, int srcSize)
 	case NATIVE_STATE_REGION_AUDIO:
 		return NativeAudio_RestoreState(src, srcSize);
 	case NATIVE_STATE_REGION_GPU:
-		return NativeGpu_RestoreState(src, srcSize);
+		return NativeOnline_IsRollbackCapture() ? NativeGpu_RestoreRollbackState(src, srcSize) : NativeGpu_RestoreState(src, srcSize);
 	}
 
 	return 0;

@@ -1,4 +1,5 @@
 #include <common.h>
+#include "UI_OnlineHud.h"
 
 // To do: add a header
 
@@ -42,10 +43,15 @@ void UI_RenderFrame_Racing()
 	gGT = sdata->gGT;
 
 	int numPlyr = gGT->numPlyrCurrGame;
+	int hudPlayers = UI_PRESENTATION_PLAYERS(numPlyr);
 	int gameMode1 = gGT->gameMode1;
 
 	// Get pointer to array of HUD structs
 	hudStructPtr = (struct UiElement2D *)data.hudStructPtr[numPlyr - 1];
+#ifdef CTR_NATIVE
+	u32 *onlineSharedUI = gGT->pushBuffer_UI.ptrOT;
+	if (NativeOnline_IsActive()) hudStructPtr = (struct UiElement2D *)data.hudStructPtr[0];
+#endif
 
 	levPtrMap = 0;
 
@@ -77,7 +83,7 @@ void UI_RenderFrame_Racing()
 		if ((gGT->hudFlags & HUD_FLAG_RENDER_LESS) == 0)
 		{
 			// If you press Triangle
-			if ((sdata->gGamepads->gamepad[0].buttonsTapped & 0x40000) != 0)
+			if (!UI_FULL_SCREEN_ONLINE && (sdata->gGamepads->gamepad[0].buttonsTapped & 0x40000) != 0)
 			{
 				// if & 8, remove bit 8,
 				// if !& 8, add bit 8,
@@ -129,6 +135,12 @@ void UI_RenderFrame_Racing()
 		{
 			// pointer to player structure
 			playerStruct = (struct Driver *)playerThread->object;
+#ifdef CTR_NATIVE
+			// Route this driver's HUD into its camera OT. Every runtime builds
+			// every HUD; only native GPU submission selects the local player's.
+			if (NativeOnline_IsActive()) gGT->pushBuffer_UI.ptrOT = gGT->pushBuffer[playerStruct->driverID].ptrOT;
+			if (NativeOnline_IsActive()) UI_DrawRaceClock(0x14, 8, UI_RACE_CLOCK_SHOW_CURRENT_TIME, playerStruct);
+#endif
 			// if player has not driven backwards very far,
 			if ((playerStruct->distanceDrivenBackwards < 0x1f5)
 
@@ -176,9 +188,9 @@ void UI_RenderFrame_Racing()
 
 			if (
 			    // numPlyrCurrGame is less than 2 (1P mode)
-			    (numPlyr < 2) &&
+			    (hudPlayers < 2) &&
 			    // if want to draw speedometer
-			    ((sdata->HudAndDebugFlags & 8) != 0))
+			    (((sdata->HudAndDebugFlags & 8) != 0) || UI_FULL_SCREEN_ONLINE))
 			{
 				UI_DrawSpeedNeedle(hudStructPtr[UI_HUD_SLOT_SPEEDOMETER].x + offset, hudStructPtr[UI_HUD_SLOT_SPEEDOMETER].y, playerStruct);
 				UI_JumpMeter_Draw(hudStructPtr[UI_HUD_SLOT_JUMP_METER].x, hudStructPtr[UI_HUD_SLOT_JUMP_METER].y, playerStruct);
@@ -452,7 +464,7 @@ void UI_RenderFrame_Racing()
 				else
 				{
 					// if numPlyrCurrGame is less than 3
-					if (numPlyr < 3)
+					if (hudPlayers < 3)
 					{
 						goto LAB_80053af4;
 					}
@@ -466,7 +478,7 @@ void UI_RenderFrame_Racing()
 				sVar2 = hudStructPtr[UI_HUD_SLOT_RANK].y;
 				UI_DrawPosSuffix(sVar1, sVar2, playerStruct, (s16)partTimeVariable5);
 
-				if (numPlyr > 2)
+				if (hudPlayers > 2)
 				{
 					// Get Color Data
 					ptrColor = data.ptrColor[sVar17];
@@ -541,6 +553,10 @@ void UI_RenderFrame_Racing()
 			// thread = thread->sibling
 			playerThread = playerThread->siblingThread;
 
+#ifdef CTR_NATIVE
+			if (NativeOnline_IsActive()) gGT->pushBuffer_UI.ptrOT = onlineSharedUI;
+			else
+#endif
 			hudStructPtr += UI_HUD_SLOT_COUNT;
 
 		} while (playerThread != 0);
@@ -742,9 +758,13 @@ void UI_RenderFrame_Racing()
 		}
 	}
 
-	if (levPtrMap != 0)
+	if (levPtrMap != 0
+#ifdef CTR_NATIVE
+	    && gGT->ptrIcons[3] != NULL && gGT->ptrIcons[4] != NULL
+#endif
+	)
 	{
-		if (((numPlyr == 1)
+		if (UI_FULL_SCREEN_ONLINE || ((numPlyr == 1)
 
 		     // if want to draw map, not speedometer
 		     && (sdata->HudAndDebugFlags & 8) == 0) ||
@@ -763,6 +783,13 @@ void UI_RenderFrame_Racing()
 			mapPosX = 500;
 			mapPosY = 195;
 
+#ifdef CTR_NATIVE
+			if (NativeOnline_IsActive())
+			{
+				int x, y; NativeOnline_MapAnchor(&x, &y); mapPosX = x; mapPosY = y;
+			}
+			else
+#endif
 			if (numPlyr == 3)
 			{
 				mapPosX -= 60;
@@ -801,6 +828,9 @@ void UI_RenderFrame_Racing()
 		{
 			playerStruct = gGT->drivers[i];
 			pb = &gGT->pushBuffer[playerStruct->driverID];
+#ifdef CTR_NATIVE
+			if (NativeOnline_IsActive()) gGT->pushBuffer_UI.ptrOT = pb->ptrOT;
+#endif
 
 			if ((((playerStruct->actionsFlagSet & ACTION_RACE_FINISHED) != 0) && ((gameMode1 & (ARCADE_MODE | TIME_TRIAL)) == 0)) &&
 			    ((
@@ -856,6 +886,9 @@ void UI_RenderFrame_Racing()
 			}
 
 			// increment the iteration counter
+#ifdef CTR_NATIVE
+			if (NativeOnline_IsActive()) gGT->pushBuffer_UI.ptrOT = onlineSharedUI;
+#endif
 			i++;
 
 			// for(int i = 0; i < numPlyrCurrGame; i++)
@@ -1104,10 +1137,17 @@ void UI_RenderFrame_Wumpa3D_2P3P4P(struct GameTracker *gGT)
 	}
 
 	struct UiElement2D *hud = data.hudStructPtr[gGT->numPlyrCurrGame - 1];
+#ifdef CTR_NATIVE
+	if (NativeOnline_IsActive()) hud = data.hudStructPtr[0];
+#endif
 
-	for (int playerIndex = 0; playerIndex < gGT->numPlyrCurrGame; playerIndex++, hud += UI_HUD_SLOT_COUNT)
+	for (int playerIndex = 0; playerIndex < gGT->numPlyrCurrGame; playerIndex++)
 	{
 		struct Driver *driver = gGT->drivers[playerIndex];
+#ifdef CTR_NATIVE
+		if (!NativeOnline_IsActive())
+#endif
+		hud = data.hudStructPtr[gGT->numPlyrCurrGame - 1] + playerIndex * UI_HUD_SLOT_COUNT;
 
 		if ((driver->actionsFlagSet & ACTION_RACE_FINISHED) != 0)
 		{
@@ -1153,6 +1193,10 @@ void UI_RenderFrame_Wumpa3D_2P3P4P(struct GameTracker *gGT)
 		}
 
 		gGT->backBuffer->primMem.cursor = prim + 1;
+#ifdef CTR_NATIVE
+		if (NativeOnline_IsActive()) AddPrim(gGT->pushBuffer[playerIndex].ptrOT, prim);
+		else
+#endif
 		AddPrim(gGT->pushBuffer_UI.ptrOT, prim);
 	}
 }

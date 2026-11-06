@@ -1,4 +1,7 @@
 #include <common.h>
+#ifdef CTR_NATIVE
+#include <platform/native_online.h>
+#endif
 
 global_variable struct RectMenu menuVS;
 global_variable struct RectMenu menuBattle;
@@ -410,6 +413,11 @@ void VB_EndEvent_DrawMenu(void)
 						bigNum->scale.x = 0;
 					}
 
+					// Each online peer retains its own full camera while reading
+					// the shared results, rather than animating split viewports.
+#ifdef CTR_NATIVE
+					if (NativeOnline_IsActive()) goto AdvanceViewport;
+#endif
 					if (winnerViewportFound == false)
 					{
 						if ((GAME_TRACKER->gameMode1 & BATTLE_MODE) == 0)

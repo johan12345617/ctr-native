@@ -1,4 +1,7 @@
 #include <common.h>
+#ifdef CTR_NATIVE
+#include <platform/native_online.h>
+#endif
 
 // Retail 0x800116ec: Battle end stat positions for 3P/4P.
 static const SVec2 s_battleStatsPos3P4P[4] = {
@@ -31,6 +34,9 @@ void UI_VsWaitForPressX(void)
 	u8 numPlayers = gGT->numPlyrCurrGame;
 
 	int readyCount = 0;
+#ifdef CTR_NATIVE
+	u32 *savedUiOT = gGT->pushBuffer_UI.ptrOT;
+#endif
 
 	for (s32 playerIndex = 0; playerIndex < numPlayers; playerIndex++)
 	{
@@ -40,6 +46,9 @@ void UI_VsWaitForPressX(void)
 		struct Driver *driver = gGT->drivers[playerIndex];
 		RECT *viewport = &gGT->pushBuffer[playerIndex].rect;
 		int buttonsTapped = sdata->gGamepads->gamepad[playerIndex].buttonsTapped;
+#ifdef CTR_NATIVE
+		if (NativeOnline_IsActive()) gGT->pushBuffer_UI.ptrOT = gGT->pushBuffer[playerIndex].ptrOT;
+#endif
 
 		// If Player has not pressed X to continue
 		// Draw comment, and battle stats
@@ -139,7 +148,11 @@ void UI_VsWaitForPressX(void)
 
 			memset(&clearColor, 0, sizeof(clearColor));
 			clearRect = *viewport;
-			CTR_Box_DrawClearBox(&clearRect, &clearColor, 0, gGT->backBuffer->otMem.uiOT, &gGT->backBuffer->primMem);
+			u32 *clearOT = gGT->backBuffer->otMem.uiOT;
+#ifdef CTR_NATIVE
+			if (NativeOnline_IsActive()) clearOT = gGT->pushBuffer[playerIndex].ptrOT;
+#endif
+			CTR_Box_DrawClearBox(&clearRect, &clearColor, 0, clearOT, &gGT->backBuffer->primMem);
 
 			// Allow Go-Back option to YouHit/HitYou
 			if ((buttonsTapped & BTN_SQUARE_two) != 0)
@@ -154,6 +167,9 @@ void UI_VsWaitForPressX(void)
 	}
 
 	// If all players press X to continue
+#ifdef CTR_NATIVE
+	gGT->pushBuffer_UI.ptrOT = savedUiOT;
+#endif
 	if (readyCount == numPlayers)
 	{
 		// Stop drawing 4 screens, draw 1 screen and options

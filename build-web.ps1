@@ -1,3 +1,4 @@
+param([switch]$Headless, [switch]$Probes)
 $ErrorActionPreference = "Stop"
 Push-Location $PSScriptRoot
 try {
@@ -24,11 +25,15 @@ try {
     if (Test-Path $ctrNinja) { $env:PATH = "$ctrNinja;$env:PATH" }
     & npm.cmd --prefix web ci --ignore-scripts
     if ($LASTEXITCODE) { throw "Tailwind dependency installation failed." }
-    & $ctrCmake --preset web-release
+    $ctrPreset = if ($Headless) { "online-v2-release" } else { "web-release" }
+    if ($Probes) { $ctrPreset = if ($Headless) { "online-v2-probe-release" } else { "web-probe-release" } }
+    & $ctrCmake --preset $ctrPreset
     if ($LASTEXITCODE) { throw "Web configuration failed." }
-    & $ctrCmake --build --preset web-release --parallel
+    & $ctrCmake --build --preset $ctrPreset --parallel
     if ($LASTEXITCODE) { throw "Web build failed." }
-    Write-Host "Built build-web. Start local and online play with: npm --prefix web start"
+    if ($Probes) { Write-Host "Built private $ctrPreset fixtures. See docs/ONLINE_V2.md for the probe commands." }
+    elseif ($Headless) { Write-Host "Built build-online-v2. Measure feasibility with: npm --prefix web run online:v2:probe" }
+    else { Write-Host "Built build-web. Start local and online play with: npm --prefix web start" }
 } finally {
     Pop-Location
 }

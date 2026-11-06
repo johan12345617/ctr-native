@@ -42,16 +42,62 @@ Open <http://localhost:8080>, select your NTSC-U raw MODE2/2352 disc image
 (`ctr-u.bin`), and click **Start game**. Click the canvas for keyboard focus.
 Use the game's menus for local multiplayer, with up to four controllers.
 The keyboard player selector changes only the keyboard's assignment.
+Xbox / XInput, DualShock 4 and DualSense controllers map automatically. Connect
+over USB or pair with the operating system over Bluetooth, then press a button
+to expose the controller to the browser. No in-game mapping step is needed.
+Hot-plugging, unplugging and reconnecting work while the game is running.
+Local play assigns up to four connected controllers to stable player slots;
+online play uses the controller most recently used on that player's computer.
+Using a controller focuses the game automatically without interrupting a text
+field. The keyboard remains available. On the web, its default assignment is
+Player 1 even when a controller connects.
+
+| Action | Xbox / XInput | DualShock 4 / DualSense |
+| --- | --- | --- |
+| Steer / navigate | Left stick or D-pad | Left stick or D-pad |
+| Accelerate / confirm | A | Cross |
+| Brake / reverse | X | Square |
+| Use item / back | B | Circle |
+| Change view | Y | Triangle |
+| Hop / drift | LB / RB | L1 / R1 |
+| Pause / start | Menu / Start | Options |
+| Select / copy lobby code | View / Back | Share / Create |
+
+Button positions follow the original PlayStation controls. Triggers and both
+stick clicks also map to their original PS1 inputs. Browser support covers the
+standard Gamepad API layout and known raw Windows Sony HID layouts. USB and
+Bluetooth behavior still needs checking with physical controllers on the
+target browser; browser/OS recognition determines which devices are exposed.
+
 All 15 selectable characters are unlocked by default, on native desktop
 and web. Existing saves get the full roster when character selection opens;
 track unlocks and Adventure rewards retain their existing behavior.
 
-## Create or join a lobby
+## Online races with your own camera
 
-1. The host opens **Online → Create Lobby** after choosing a disc. This
+Build the Online 2.0 authority as described in [ONLINE_V2.md](ONLINE_V2.md), then
+run `npm --prefix web run start:online-v2`. Start the game and choose **Online**
+in the engine main menu (the web Online button is a shortcut). **Create Lobby**
+shows a code; **Join Lobby** accepts a typed code or controller editing with
+left/right to select a character and up/down to change it. C / Enter confirms;
+V backs out of the lobby. Space / Select copies the room code.
+
+The host starts once both players are ready, then chooses **Race**, **Cup** or
+**Battle**. Each player controls their own original character selector. The host
+controls shared track/cup selection, lap counts and battle settings; players can
+choose their own battle teams. Original results, retry and cup advancement run
+through the same synchronized session. Choose Quit in the original game menu to
+return to mode selection, then Leave Lobby to disconnect. Driving uses prediction;
+menu, pause, results and loading boundaries use confirmed controls.
+
+This menu currently supports two players; live internet validation remains pending.
+
+## Create or join a shared-screen lobby
+
+1. The host opens **Shared screen → Create Lobby** after choosing a disc. This
    starts the host's game if it is not already running.
 2. Share **Copy invite link**, or the six-character lobby code.
-3. Guests open that same website and choose **Online → Join Lobby**.
+3. Guests open that same website and choose **Shared screen → Join Lobby**.
    An invite link fills in the code. Click **Join game**.
 4. Guests receive the host's video and audio without downloading Wasm or
    selecting a disc. Click **Enable game audio** to hear the game.
@@ -69,8 +115,16 @@ lobby; there is no host migration.
 Keep the host tab visible. Background throttling can pause the simulation.
 All saves belong to the host; guests do not run an independent game.
 
-The disc stays local. It is read into browser memory when starting and is
-never included in the build or uploaded. A full image is about 600 MB, so
+On the local computer, `/local-disc` streams exactly the repository's
+`assets/ctr-u.bin` to the browser automatically. The route accepts only loopback
+connections with a loopback Host and same-origin requests; it is not available
+to remote players. Remote players select a disc manually, then click
+**Start game**. If Online was selected
+first, **Start game** opens the in-game Create/Join lobby directly. The button
+remains visible while choosing a disc and enables after disc validation.
+
+The disc is never included in the build or online input/state packets.
+A full image is about 600 MB, so
 use a desktop browser with sufficient available memory. There are no touch
 controls; use a keyboard or gamepad. Press a gamepad button to expose it to
 the browser. Audio may need a click on the canvas to unlock playback.
@@ -84,11 +138,15 @@ not persisted, so select it again after a reload.
 ## Hosting over the internet
 
 The included Node server serves an allowlist of browser assets from
-`build-web/` and handles WebSocket signaling at `/lobby`. It never serves
-the disc, source tree, CMake cache or memory-card files. For deployment,
+`build-web/` and handles WebSocket signaling at `/lobby`. Its local-only
+`/local-disc` convenience route serves the single configured disc. It never
+serves the source tree, CMake cache or memory-card files. For deployment,
 include the built `index.html`, `app.js`, `online.js`, `input.js`,
-`styles.css`, `ctr_native.js`, and `ctr_native.wasm`, plus the Node server
-and its `ws` dependency. Static-only hosting does not support lobbies.
+`styles.css`, `ctr_native.js`, `ctr_native.wasm`, and all `online-v2-*` browser
+modules copied into `build-web/` by CMake. Include the Node server, its imported
+Node modules and its `ws` dependency. Online race hosting additionally requires
+the headless production WASM build and server-local disc assets described in
+[ONLINE_V2.md](ONLINE_V2.md). Static-only hosting does not support lobbies.
 
 Defaults are `HOST=127.0.0.1`, `PORT=8080`. For remote access, run this
 service behind an HTTPS reverse proxy that forwards HTTP and WebSocket
@@ -173,6 +231,16 @@ npm --prefix web test
 The server/input tests cover capacity, slot reuse, signaling boundaries,
 origin rejection, invalid requests, static-file restrictions and controller
 mapping. Native input timeout/replay/multitap checks run through CTest.
+
+With Playwright available, run the two-browser manual-disc regression with:
+
+```sh
+node web/online-v2-engine-probe.mjs .cache/online-v2/manual-disc.json race --manual-disc
+```
+
+This disables `/local-disc` as on a remote/tunnel connection. It checks that
+Online keeps **Start game** visible, rejects an invalid image, accepts manual
+selection on both clients, and opens the native lobby before playing a race.
 
 References: [Emscripten Asyncify](https://emscripten.org/docs/porting/asyncify.html),
 [Emscripten filesystem API](https://emscripten.org/docs/api_reference/Filesystem-API.html),

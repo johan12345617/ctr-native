@@ -1,4 +1,5 @@
 #include <common.h>
+#include "UI_OnlineHud.h"
 
 #ifndef UI_NUM_X
 #define UI_NUM_X      sdata->s_x
@@ -34,7 +35,7 @@ void UI_DrawNumWumpa(s16 posX, s16 posY, struct Driver *d)
 	struct GameTracker *gGT = GAME_TRACKER;
 	char message[UI_DRAWNUM_WUMPA_TEXT_BUFFER_SIZE];
 
-	if (gGT->numPlyrCurrGame <= UI_DRAWNUM_TEXT_PLAYER_MAX)
+	if (UI_PRESENTATION_PLAYERS(gGT->numPlyrCurrGame) <= UI_DRAWNUM_TEXT_PLAYER_MAX)
 	{
 		DecalFont_DrawLine(UI_NUM_X, posX, posY + UI_DRAWNUM_SMALL_X_OFFSET_Y, FONT_SMALL, ORANGE);
 
